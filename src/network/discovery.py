@@ -3,11 +3,31 @@ import struct
 import threading
 import time
 import json
+import os
+import nacl.signing
+import nacl.encoding
 
 MCAST_GRP = '239.255.42.99'
 MCAST_PORT = 6000
-NODE_ID = "TON_ID_ED25519" # Récupère celui généré au Sprint 0
 TCP_PORT = 7777
+
+def get_node_id():
+    key_path = "node.key"
+    if not os.path.exists(key_path):
+        print("[-] Fichier node.key introuvable. Veuillez exécuter src/crypto/generate_identity.py au préalable.")
+        return "UNKNOWN_NODE"
+    
+    try:
+        with open(key_path, "r", encoding="utf-8") as f:
+            private_hex = f.read().strip()
+        private_key = nacl.signing.SigningKey(private_hex, encoder=nacl.encoding.HexEncoder)
+        public_key = private_key.verify_key
+        return public_key.encode(encoder=nacl.encoding.HexEncoder).decode('utf-8')
+    except Exception as e:
+        print(f"[-] Erreur de lecture de l'identité : {e}")
+        return "UNKNOWN_NODE"
+
+NODE_ID = get_node_id()
 
 class DiscoveryNode:
     def __init__(self):
