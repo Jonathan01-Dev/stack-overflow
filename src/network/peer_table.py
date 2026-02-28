@@ -89,9 +89,12 @@ class PeerTable:
                 if os.path.getsize(PEERS_FILE) == 0:
                     self.peers = {}
                     return
-                with open(PEERS_FILE, "r", encoding="utf-8") as f:
-                    self.peers = json.load(f)
+                content = f.read().strip()
+                if not content:
+                    self.peers = {}
+                    return
+                self.peers = json.loads(content)
                 print(f"[+] Table des pairs chargée depuis le disque ({len(self.peers)} pairs)")
             except Exception as e:
-                print(f"[-] Erreur de lecture de la table des pairs : {e}")
+                print(f"[-] Erreur de lecture de la table des pairs (JSON invalide) : {e}")
                 self.peers = {}

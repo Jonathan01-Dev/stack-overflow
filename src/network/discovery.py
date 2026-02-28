@@ -291,8 +291,8 @@ class DiscoveryNode:
             })
             print(f"[*] [DEBUG] Envoi sécurisé type {msg_type} vers {peer_id[:8]}")
             sock.sendall(envelope)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[-] [DEBUG] Erreur critique envoi sécurisé vers {peer_id[:8]}: {e}")
         
     def start_tcp_server(self):
         """Serveur TCP pour recevoir les PEER_LIST en unicast"""
@@ -359,7 +359,7 @@ class DiscoveryNode:
                     conn.sendall(encode_tlv(TYPE_PONG, {}))
                     
         except Exception as e:
-            pass
+            print(f"[-] Erreur critique Tunnel ({peer_id[:8] if peer_id else 'Handshake'}): {e}")
         finally:
             conn.close()
             with self.connections_lock:
