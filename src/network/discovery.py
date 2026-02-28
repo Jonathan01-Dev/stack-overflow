@@ -7,11 +7,14 @@ import json
 import os
 import nacl.signing
 import nacl.encoding
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    load_dotenv = None
+
 from peer_table import PeerTable
 from tlv import encode_tlv, decode_tlv, TYPE_PEER_LIST, TYPE_PING, TYPE_PONG
-
-load_dotenv()
 
 MCAST_GRP = '239.255.42.99'
 MCAST_PORT = 6000
