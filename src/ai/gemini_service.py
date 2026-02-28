@@ -14,7 +14,7 @@ class GeminiService:
     def __init__(self, api_key=None, enabled=True):
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
         self.enabled = enabled
-        self.model = "gemini-1.5-flash"  # gemini-pro est déprécié
+        self.model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
         self.api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
 
     def build_prompt(self, conversation_context, user_query, files_context=None):
