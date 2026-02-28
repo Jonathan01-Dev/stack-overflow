@@ -1,12 +1,10 @@
-import nacl.signing
-import nacl.encoding
-import binascii
+import argparse
 import os
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-KEY_PATH = os.path.join(PROJECT_ROOT, "node.key")
 
-def generate_keys():
+def generate_keys(filename="node.key"):
+    key_path = os.path.join(PROJECT_ROOT, filename)
     # 1. Générer une clé de signature (Clé Privée)
     private_key = nacl.signing.SigningKey.generate()
     
@@ -19,14 +17,18 @@ def generate_keys():
 
     # 4. Sauvegarder la clé privée dans un fichier sécurisé (.key)
     # Note: Ajoutez *.key à votre .gitignore !
-    with open(KEY_PATH, "w", encoding="utf-8") as f:
+    with open(key_path, "w", encoding="utf-8") as f:
         f.write(private_hex)
 
     print(f"✅ IDENTITÉ GÉNÉRÉE")
     print(f"Votre NODE_ID (Public) : {node_id}")
-    print(f"Clé sauvegardée dans : {KEY_PATH}")
+    print(f"Clé sauvegardée dans : {key_path}")
     
     return node_id
 
 if __name__ == "__main__":
-    generate_keys()
+    parser = argparse.ArgumentParser(description="Générateur d'identité P2P")
+    parser.add_argument('filename', type=str, nargs='?', default="node.key", help="Nom du fichier de clé (défaut: node.key)")
+    args = parser.parse_args()
+    
+    generate_keys(args.filename)
