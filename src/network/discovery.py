@@ -227,9 +227,10 @@ class DiscoveryNode:
             sig_a = self.crypto.sign(shared_hash)
             
             session = CryptoSession(shared)
-            # On envoie AUTH chiffré dans le tunnel
-            nonce, encrypted_sig = session.encrypt(sig_a)
-            sock.sendall(encode_tlv(TYPE_HANDSHAKE_AUTH, {"nonce": nonce.hex(), "sig": encrypted_sig.hex()}))
+            # On envoie AUTH chiffré (contient notre NODE_ID et la signature)
+            auth_payload = json.dumps({"node_id": NODE_ID, "sig": sig_a.hex()}).encode('utf-8')
+            nonce, encrypted_auth = session.encrypt(auth_payload)
+            sock.sendall(encode_tlv(TYPE_HANDSHAKE_AUTH, {"nonce": nonce.hex(), "auth": encrypted_auth.hex()}))
             
             # 4. Recevoir OK
             m_type, resp = decode_tlv(sock)
@@ -296,7 +297,10 @@ class DiscoveryNode:
                 if not session:
                     conn.close()
                     return
-                # Note: peer_id peut être "PENDING_AUTH" ici
+                with self.connections_lock:
+                    self.active_sessions[peer_id] = session
+                    self.active_connections[peer_id] = conn
+                print(f"[+] Tunnel E2EE établi avec {peer_id[:8]} (X25519 + AES-GCM)")
             else:
                 with self.connections_lock:
                     session = self.active_sessions.get(peer_id)
@@ -315,17 +319,6 @@ class DiscoveryNode:
                         break
                     
                     i_type, i_payload = self._decode_tlv_from_bytes(plaintext)
-                    
-                    # Cas spécial : Bob lie l'ID de Alice lors du premier message sécurisé
-                    if peer_id == "PENDING_AUTH":
-                        sender_id = i_payload.get('sender_id')
-                        if sender_id:
-                            peer_id = sender_id
-                            with self.connections_lock:
-                                self.active_sessions[peer_id] = session
-                                self.active_connections[peer_id] = conn
-                            print(f"[+] Tunnel E2EE établi avec {peer_id[:8]} (X25519 + AES-GCM)")
-                    
                     self._process_message(peer_id, i_type, i_payload)
                 
                 elif msg_type == TYPE_PING:
@@ -366,30 +359,25 @@ class DiscoveryNode:
             if m_type != TYPE_HANDSHAKE_AUTH: return None, None
             
             nonce = bytes.fromhex(req['nonce'])
-            encrypted_sig = bytes.fromhex(req['sig'])
-            sig_a = session.decrypt(nonce, encrypted_sig)
+            encrypted_auth = bytes.fromhex(req['auth'])
+            auth_json_data = session.decrypt(nonce, encrypted_auth)
+            if auth_json_data is None: return None, None
             
-            # 4. Vérifier signature de Alice (TOFU est géré par NODE_ID = clé_Alice)
-            # On a besoin du node_id de Alice. Dans notre protocole, Alice doit s'identifier.
-            # On va assumer que le premier message AUTH_Alice permet de lier son ID.
-            # Mais comment Bob connaît le NODE_ID avant ? 
-            # Alice envoie son Hello. Bob ne sait pas encore qui elle est.
-            # En fait, TOFU : Bob accepte la clé d'Alice lors du AUTH.
+            auth_info = json.loads(auth_json_data.decode('utf-8'))
+            a_node_id = auth_info['node_id']
+            a_sig = bytes.fromhex(auth_info['sig'])
+            
+            # 4. Vérifier signature de Alice (TOFU)
             import hashlib
             shared_hash = hashlib.sha256(shared).digest()
+            if not self.crypto.verify(shared_hash, a_sig, a_node_id):
+                print(f"[!] Échec Handshake : Signature de Alice invalide !")
+                return None, None
             
-            # Tentative de récupération du Node ID de Alice (elle sera validée plus tard ou ici)
-            # Pour l'instant, on dérive le node_id de Alice depuis sa clé publique qu'elle fournira plus tard
-            # OU on change le protocole pour qu'elle l'envoie dans HELLO.
-            # Utilisons une approche simplifiée : Bob valide AUTH par rapport à TOFU s'il la connaît
-            # Pour simplifier, on renvoie OK. L'identité sera validée au message suivant.
             conn.sendall(encode_tlv(TYPE_HANDSHAKE_OK, {}))
-            
-            # Dans ce Hackathon, on va dire que le tunnel est lié par le premier message sécurisé
-            # On retourne peer_id temporaire ou on attend le premier message.
-            # Amélioration : Alice envoie son ID dans AUTH.
-            return session, "PENDING_AUTH" 
-        except Exception:
+            return session, a_node_id
+        except Exception as e:
+            print(f"[-] Erreur Handshake Bob : {e}")
             return None, None
 
     def _decode_tlv_from_bytes(self, data):
@@ -418,6 +406,10 @@ class DiscoveryNode:
             sender_id = payload.get('sender_id', 'Inconnu')
             msg = payload.get('text', '')
             print(f"\n[E2EE MSG] {sender_id[:8]} > {msg}\n")
+            
+        elif msg_type == TYPE_PING:
+            # Répondre avec un PONG sécurisé
+            self._send_secure_tlv(peer_id, TYPE_PONG, {})
             
         elif msg_type == TYPE_PONG:
             pass # Keep-alive validé
@@ -484,6 +476,12 @@ class DiscoveryNode:
                             for pid in self.active_sessions:
                                 print(f"  - {pid[:16]}...")
                     
+                    elif cmd == "/debug":
+                        with self.connections_lock:
+                            print(f"[DEBUG] active_sessions: {list(self.active_sessions.keys())}")
+                            print(f"[DEBUG] active_connections: {list(self.active_connections.keys())}")
+                            print(f"[DEBUG] peer_table: {len(self.peer_table.get_all())} nodes")
+
                     elif cmd.startswith("/msg "):
                         text = cmd[5:]
                         with self.connections_lock:
