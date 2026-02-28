@@ -484,9 +484,9 @@ class DiscoveryNode:
         
         if self.crypto.verify(manifest_hash, bytes.fromhex(sig_hex), manifest['sender_id']):
             self.network_manifests[file_id] = manifest
-            print(f"[*] Nouveau Manifest reçu : {manifest['filename']} ({manifest['size'] // 1024} KB)")
+            print(f"[*] [SYNC] Nouveau Manifest reçu : {manifest['filename']} ({manifest['size'] // 1024} KB) de {peer_id[:8]}")
         else:
-            print(f"[!] Manifest invalide reçu de {peer_id[:8]}")
+            print(f"[!] [SYNC] Manifest invalide (signature KO) reçu de {peer_id[:8]}")
 
     def _handle_chunk_req(self, peer_id, payload):
         """Répond à une demande de chunk."""
@@ -563,7 +563,7 @@ class DiscoveryNode:
         
         if not local_files: return
         
-        print(f"[*] Synchronisation de {len(local_files)} manifests avec {peer_id[:8]}...")
+        print(f"[*] [SYNC] Envoi de {len(local_files)} manifests vers {peer_id[:8]}...")
         for file_id, info in local_files.items():
             manifest = info.get("manifest")
             if manifest:
