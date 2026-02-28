@@ -460,6 +460,54 @@ class DiscoveryNode:
             print(f"\r--- Peer Table ({len(self.peer_table.get_all())} nœuds découverts) ---")
             time.sleep(10)
 
+    def start_cli(self):
+        """Interface de chat interactive en ligne de commande"""
+        def run():
+            time.sleep(2) # Attendre que le serveur démarre
+            print("\n" + "="*50)
+            print("🚀 TERMINAL CHAT ARCHIPEL (Sprint 2 - E2EE)")
+            print("Commandes :")
+            print("  /list     - Liste les pairs sécurisés connectés")
+            print("  /msg <txt> - Envoie un message à TOUS les pairs")
+            print("  /quit     - Quitte le nœud")
+            print("="*50 + "\n")
+            
+            while True:
+                try:
+                    cmd = input("Archipel> ").strip()
+                    if not cmd: continue
+                    
+                    if cmd == "/list":
+                        with self.connections_lock:
+                            count = len(self.active_sessions)
+                            print(f"[*] {count} pairs sécurisés connectés :")
+                            for pid in self.active_sessions:
+                                print(f"  - {pid[:16]}...")
+                    
+                    elif cmd.startswith("/msg "):
+                        text = cmd[5:]
+                        with self.connections_lock:
+                            targets = list(self.active_sessions.keys())
+                        
+                        if not targets:
+                            print("[!] Aucun pair connecté pour envoyer le message.")
+                        else:
+                            for tid in targets:
+                                self.send_chat_message(tid, text)
+                            print(f"[OK] Message envoyé à {len(targets)} pairs.")
+                            
+                    elif cmd == "/quit":
+                        print("[!] Arrêt demandé...")
+                        os._exit(0)
+                    else:
+                        print("[?] Commande inconnue. Utilisez /msg message_ici")
+                except EOFError:
+                    break
+                except Exception as e:
+                    print(f"[-] Erreur CLI : {e}")
+
+        threading.Thread(target=run, daemon=True).start()
+
 if __name__ == "__main__":
     if NODE_ID == "UNKNOWN_NODE":
         print("Erreur critique: Node ID introuvable. Arrêt.")
@@ -477,19 +525,12 @@ if __name__ == "__main__":
     threading.Thread(target=node.clean_peers, daemon=True).start()
     threading.Thread(target=node.keep_alive_connections, daemon=True).start()
     
+    # Nouveau : Démarrer l'interface interactive
+    node.start_cli()
+    
     try:
-        # Boucle interactive pour tester l'envoi de messages de chat (Sprint 2)
+        # On garde le thread principal en vie
         while True:
-            time.sleep(5)
-            with node.connections_lock:
-                peer_ids = list(node.active_sessions.keys())
-            
-            if peer_ids:
-                print(f"\n[INFO] Connecté à {len(peer_ids)} pairs sécurisés.")
-                # Petit test automatique ou manuel
-                # On peut décommenter pour un test auto :
-                # node.send_chat_message(peer_ids[0], "Ceci est un message secret via tunnel AES-GCM !")
-            
             time.sleep(1)
     except KeyboardInterrupt:
         print("\n[!] Arrêt du nœud...")
