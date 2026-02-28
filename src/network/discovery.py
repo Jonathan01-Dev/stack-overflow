@@ -40,6 +40,7 @@ class DiscoveryNode:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         
         def run():
             while True:
@@ -50,8 +51,34 @@ class DiscoveryNode:
                     "timestamp": time.time()
                 }
                 packet = json.dumps(hello).encode('utf-8')
-                sock.sendto(packet, (MCAST_GRP, MCAST_PORT))
-                print(f"[*] HELLO envoyé sur {MCAST_GRP}")
+                
+                # Forcer l'envoi sur TOUTES les cartes réseau (VirtualBox, Wi-Fi, Ethernet...)
+                try:
+                    host_name = socket.gethostname()
+                    local_ips = socket.gethostbyname_ex(host_name)[2]
+                except Exception:
+                    local_ips = []
+                local_ips.append("0.0.0.0") # Toujours tenter le comportement par défaut
+                
+                for ip in set(local_ips):
+                    try:
+                        if ip != "0.0.0.0":
+                            sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(ip))
+                        sock.sendto(packet, (MCAST_GRP, MCAST_PORT))
+                    except Exception:
+                        pass
+
+                # Fallback: Envoi en Broadcast (Très utile pour les Hotspots Android)
+                try:
+                    sock.sendto(packet, ('<broadcast>', MCAST_PORT))
+                except Exception:
+                    pass
+                try:
+                    sock.sendto(packet, ('255.255.255.255', MCAST_PORT))
+                except Exception:
+                    pass
+
+                print(f"[*] HELLO envoyé (Multicast + Broadcast fallback)")
                 time.sleep(30)
         
         threading.Thread(target=run, daemon=True).start()
@@ -60,14 +87,34 @@ class DiscoveryNode:
         """Écoute les paquets HELLO des autres"""
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         
         # Liaison au port multicast
-        sock.bind(('', MCAST_PORT))
+        try:
+            # Sous Windows, l'écoute sur '' (0.0.0.0) écoute partout
+            sock.bind(('', MCAST_PORT))
+        except OSError:
+            pass
         
-        # Rejoindre le groupe multicast
+        # Rejoindre le groupe multicast sur TOUTES les interfaces réseau actives simultanément
         group = socket.inet_aton(MCAST_GRP)
-        mreq = struct.pack('4sL', group, socket.INADDR_ANY)
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+        
+        try:
+            host_name = socket.gethostname()
+            local_ips = socket.gethostbyname_ex(host_name)[2]
+        except Exception:
+            local_ips = []
+        local_ips.append("0.0.0.0") # Comportement INADDR_ANY par défaut
+        
+        for ip in set(local_ips):
+            try:
+                if ip == "0.0.0.0":
+                    mreq = struct.pack('4sL', group, socket.INADDR_ANY)
+                else:
+                    mreq = struct.pack('4s4s', group, socket.inet_aton(ip))
+                sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+            except Exception:
+                pass
 
         def run():
             print(f"[+] Écoute Multicast sur {MCAST_GRP}:{MCAST_PORT}...")
@@ -77,14 +124,77 @@ class DiscoveryNode:
                 
                 if pkt['node_id'] != NODE_ID:
                     # Mise à jour ou ajout dans la Peer Table
+                    is_new = pkt['node_id'] not in self.peer_table
                     self.peer_table[pkt['node_id']] = {
                         "ip": addr[0],
-                        "port": pkt['tcp_port'],
+                        "port": int(pkt['tcp_port']),
                         "last_seen": time.time()
                     }
-                    print(f"[!] Nouveau pair détecté : {pkt['node_id']} à {addr[0]}")
-                    # Ici, tu devrais normalement répondre avec PEER_LIST via TCP
+                    if is_new:
+                        print(f"[!] Nouveau pair détecté par HELLO : {pkt['node_id']} à {addr[0]}")
+                    
+                    # Répondre avec PEER_LIST via TCP en Unicast
+                    self.reply_with_peer_list(addr[0], int(pkt['tcp_port']))
         
+        threading.Thread(target=run, daemon=True).start()
+
+    def reply_with_peer_list(self, target_ip, target_port):
+        """Envoi en unicast TCP de la liste des nœuds connus"""
+        def run():
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.settimeout(2.0)
+                    s.connect((target_ip, target_port))
+                    
+                    # Préparer la liste (sans les objets non-sérialisables)
+                    peers_to_send = {}
+                    for pid, info in self.peer_table.items():
+                        peers_to_send[pid] = {"ip": info["ip"], "port": info["port"]}
+                        
+                    reply = {
+                        "type": "PEER_LIST",
+                        "sender_id": NODE_ID,
+                        "peers": peers_to_send
+                    }
+                    
+                    s.sendall(json.dumps(reply).encode('utf-8'))
+            except Exception as e:
+                pass # Échec de connexion TCP (nœud potentiellement hors-ligne ou port fermé)
+                
+        threading.Thread(target=run, daemon=True).start()
+        
+    def start_tcp_server(self):
+        """Serveur TCP pour recevoir les PEER_LIST en unicast"""
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(('0.0.0.0', TCP_PORT))
+        sock.listen(5)
+        
+        def run():
+            print(f"[+] Serveur TCP (Unicast) démarré sur le port {TCP_PORT}...")
+            while True:
+                conn, addr = sock.accept()
+                with conn:
+                    try:
+                        data = conn.recv(4096)
+                        if data:
+                            pkt = json.loads(data.decode('utf-8'))
+                            if pkt.get('type') == 'PEER_LIST':
+                                new_peers = pkt.get('peers', {})
+                                added = 0
+                                for pid, info in new_peers.items():
+                                    if pid != NODE_ID and pid not in self.peer_table:
+                                        self.peer_table[pid] = {
+                                            "ip": info["ip"],
+                                            "port": info["port"],
+                                            "last_seen": time.time()
+                                        }
+                                        added += 1
+                                if added > 0:
+                                    print(f"[*] Reçu PEER_LIST de {pkt['sender_id']} : {added} nouveaux pairs ajoutés.")
+                    except Exception:
+                        pass
+                        
         threading.Thread(target=run, daemon=True).start()
 
     def clean_peers(self):
@@ -105,6 +215,7 @@ if __name__ == "__main__":
     # Lancement des threads
     node.start_beacon()
     node.start_listener()
+    node.start_tcp_server()
     
     # Thread de nettoyage (non-daemon si on veut l'utiliser comme boucle principale, 
     # ou on peut le mettre en thread séparé et garder la boucle ici)
