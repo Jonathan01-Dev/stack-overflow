@@ -1,6 +1,10 @@
 import nacl.signing
 import nacl.encoding
 import binascii
+import os
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+KEY_PATH = os.path.join(PROJECT_ROOT, "node.key")
 
 def generate_keys():
     # 1. Générer une clé de signature (Clé Privée)
@@ -15,12 +19,12 @@ def generate_keys():
 
     # 4. Sauvegarder la clé privée dans un fichier sécurisé (.key)
     # Note: Ajoutez *.key à votre .gitignore !
-    with open("node.key", "w", encoding="utf-8") as f:
+    with open(KEY_PATH, "w", encoding="utf-8") as f:
         f.write(private_hex)
 
     print(f"✅ IDENTITÉ GÉNÉRÉE")
     print(f"Votre NODE_ID (Public) : {node_id}")
-    print(f"Clé sauvegardée dans : node.key")
+    print(f"Clé sauvegardée dans : {KEY_PATH}")
     
     return node_id
 
