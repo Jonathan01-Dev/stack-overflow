@@ -208,6 +208,8 @@ def ai_ask():
 @app.route('/api/ai/index_file/<fid>', methods=['POST'])
 def ai_index_file(fid):
     if not _node: return jsonify({"success": False}), 500
+    if not _gemini or not _gemini.enabled:
+        return jsonify({"success": False, "error": "L'IA n'est pas activée."}), 400
     
     # Trouver le fichier localement
     local_files = _node.storage_mgr.get_available_files()
@@ -216,21 +218,34 @@ def ai_index_file(fid):
         
     file_info = local_files[fid]
     path = file_info["local_path"]
+    filename = file_info["manifest"]["filename"]
     
     if not path or not os.path.exists(path):
         return jsonify({"success": False, "error": "Chemin du fichier invalide."}), 400
         
     try:
-        # Lire le fichier (on limite à 1MB pour le proto)
-        size = os.path.getsize(path)
-        if size > 1024 * 1024:
-            return jsonify({"success": False, "error": "Fichier trop volumineux (>1MB)."}), 400
+        # Envoyer via l'API File Gemini (chunked upload API REST)
+        res = _gemini.upload_file_chunked(path, display_name=filename)
+        
+        if "error" in res:
+            return jsonify({"success": False, "error": res["error"]}), 500
             
-        with open(path, 'r', encoding='utf-8', errors='ignore') as f:
-            content = f.read()
-            _ai_files_context[fid] = content
+        # L'API Gemini retourne un objet `file`
+        if "file" in res and "uri" in res["file"]:
+            gemini_uri = res["file"]["uri"]
+            mime_type = res["file"].get("mimeType", "application/octet-stream")
             
-        return jsonify({"success": True, "indexed": True})
+            # Stocker l'URI et le mimetype à la place du contenu brut
+            _ai_files_context[fid] = {
+                "type": "gemini_file",
+                "fileUri": gemini_uri,
+                "mimeType": mime_type,
+                "filename": filename
+            }
+            return jsonify({"success": True, "indexed": True, "uri": gemini_uri})
+        else:
+            return jsonify({"success": False, "error": "Format de réponse inattendu de Gemini."}), 500
+            
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
