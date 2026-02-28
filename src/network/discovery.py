@@ -275,7 +275,9 @@ class DiscoveryNode:
             sock = self.active_connections.get(peer_id)
             session = self.active_sessions.get(peer_id)
             
-        if not sock or not session: return
+        if not sock or not session:
+            print(f"[-] [DEBUG] Echec envoi type {msg_type} : Pas de session active pour {peer_id[:8]}")
+            return
         
         try:
             # On encode le sous-message TLV interne
