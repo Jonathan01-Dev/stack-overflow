@@ -96,3 +96,23 @@ class DiscoveryNode:
                 print(f"[-] Pair déconnecté (timeout) : {id}")
                 del self.peer_table[id]
             time.sleep(10)
+
+if __name__ == "__main__":
+    node = DiscoveryNode()
+    
+    print(f"[*] Démarrage du nœud : {NODE_ID}")
+    
+    # Lancement des threads
+    node.start_beacon()
+    node.start_listener()
+    
+    # Thread de nettoyage (non-daemon si on veut l'utiliser comme boucle principale, 
+    # ou on peut le mettre en thread séparé et garder la boucle ici)
+    threading.Thread(target=node.clean_peers, daemon=True).start()
+    
+    try:
+        # On garde le thread principal en vie pour que les daemons tournent
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\n[!] Arrêt du nœud...")
