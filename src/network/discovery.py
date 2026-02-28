@@ -425,6 +425,8 @@ class DiscoveryNode:
 
     def _process_message(self, peer_id, msg_type, payload):
         """Traite un message reçu et déchiffré."""
+        # print(f"DEBUG: Réception message sécurisé TYPE={msg_type} de {peer_id[:8]}")
+        
         if msg_type == TYPE_PEER_LIST:
             new_peers = payload.get('peers', {})
             added = 0
@@ -472,23 +474,26 @@ class DiscoveryNode:
     def _handle_manifest(self, peer_id, manifest):
         """Reçoit un manifest d'un pair."""
         file_id = manifest.get('file_id')
-        if not file_id: return
+        if not file_id: 
+            print(f"[-] [DEBUG] Manifest reçu de {peer_id[:8]} sans file_id")
+            return
         
         # Vérification de la signature du manifest
         manifest_copy = manifest.copy()
         sig_hex = manifest_copy.pop('signature', None)
-        if not sig_hex: return
+        if not sig_hex: 
+            print(f"[-] [DEBUG] Manifest reçu de {peer_id[:8]} sans signature")
+            return
         
         manifest_content = json.dumps(manifest_copy, sort_keys=True, separators=(',', ':')).encode('utf-8')
         manifest_hash = hashlib.sha256(manifest_content).digest()
+        sender_id = manifest.get('sender_id')
         
-        if self.crypto.verify(manifest_hash, bytes.fromhex(sig_hex), manifest['sender_id']):
+        if self.crypto.verify(manifest_hash, bytes.fromhex(sig_hex), sender_id):
             self.network_manifests[file_id] = manifest
             print(f"[*] [SYNC] Nouveau Manifest reçu : {manifest['filename']} ({manifest['size'] // 1024} KB) de {peer_id[:8]}")
         else:
-            print(f"[!] [SYNC] Manifest invalide (signature KO) reçu de {peer_id[:8]}")
-            # Log de debug : comparer les hashs ou IDs si besoin
-            # print(f"DEBUG: sender_id={manifest['sender_id']} my_verify_of_sender={peer_id}")
+            print(f"[!] [SYNC] Manifest invalide (signature KO) de {peer_id[:8]} (signé par {sender_id[:8]})")
 
 
     def _handle_chunk_req(self, peer_id, payload):
