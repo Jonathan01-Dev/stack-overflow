@@ -6,6 +6,7 @@ import json
 import os
 import nacl.signing
 import nacl.encoding
+from peer_table import PeerTable
 
 MCAST_GRP = '239.255.42.99'
 MCAST_PORT = 6000
@@ -33,7 +34,7 @@ NODE_ID = get_node_id()
 
 class DiscoveryNode:
     def __init__(self):
-        self.peer_table = {} # {node_id: {"ip": ip, "port": port, "last_seen": timestamp}}
+        self.peer_table = PeerTable()
 
     def start_beacon(self):
         """Envoie un paquet HELLO toutes les 30 secondes"""
@@ -124,12 +125,10 @@ class DiscoveryNode:
                 
                 if pkt['node_id'] != NODE_ID:
                     # Mise à jour ou ajout dans la Peer Table
-                    is_new = pkt['node_id'] not in self.peer_table
-                    self.peer_table[pkt['node_id']] = {
-                        "ip": addr[0],
-                        "port": int(pkt['tcp_port']),
-                        "last_seen": time.time()
-                    }
+                    is_new = self.peer_table.add_or_update_peer(
+                        pkt['node_id'], addr[0], int(pkt['tcp_port'])
+                    )
+                    
                     if is_new:
                         print(f"[!] Nouveau pair détecté par HELLO : {pkt['node_id']} à {addr[0]}")
                     
@@ -148,8 +147,8 @@ class DiscoveryNode:
                     
                     # Préparer la liste (sans les objets non-sérialisables)
                     peers_to_send = {}
-                    for pid, info in self.peer_table.items():
-                        peers_to_send[pid] = {"ip": info["ip"], "port": info["port"]}
+                    for pid, info in self.peer_table.get_all().items():
+                        peers_to_send[pid] = {"ip": info["ip"], "port": info["tcp_port"]}
                         
                     reply = {
                         "type": "PEER_LIST",
@@ -183,12 +182,8 @@ class DiscoveryNode:
                                 new_peers = pkt.get('peers', {})
                                 added = 0
                                 for pid, info in new_peers.items():
-                                    if pid != NODE_ID and pid not in self.peer_table:
-                                        self.peer_table[pid] = {
-                                            "ip": info["ip"],
-                                            "port": info["port"],
-                                            "last_seen": time.time()
-                                        }
+                                    if pid != NODE_ID and self.peer_table.get_peer(pid) is None:
+                                        self.peer_table.add_or_update_peer(pid, info["ip"], info["port"])
                                         added += 1
                                 if added > 0:
                                     print(f"[*] Reçu PEER_LIST de {pkt['sender_id']} : {added} nouveaux pairs ajoutés.")
@@ -200,11 +195,9 @@ class DiscoveryNode:
     def clean_peers(self):
         """Supprime les pairs qui n'ont pas donné de signe de vie depuis 90s"""
         while True:
-            now = time.time()
-            to_delete = [id for id, info in self.peer_table.items() if now - info['last_seen'] > 90]
-            for id in to_delete:
-                print(f"[-] Pair déconnecté (timeout) : {id}")
-                del self.peer_table[id]
+            deleted = self.peer_table.cleanup_inactive(timeout=90)
+            for pid in deleted:
+                print(f"[-] Pair déconnecté (timeout) : {pid}")
             time.sleep(10)
 
 if __name__ == "__main__":
