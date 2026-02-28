@@ -479,7 +479,7 @@ class DiscoveryNode:
         sig_hex = manifest_copy.pop('signature', None)
         if not sig_hex: return
         
-        manifest_content = json.dumps(manifest_copy, sort_keys=True).encode('utf-8')
+        manifest_content = json.dumps(manifest_copy, sort_keys=True, separators=(',', ':')).encode('utf-8')
         manifest_hash = hashlib.sha256(manifest_content).digest()
         
         if self.crypto.verify(manifest_hash, bytes.fromhex(sig_hex), manifest['sender_id']):
@@ -487,6 +487,9 @@ class DiscoveryNode:
             print(f"[*] [SYNC] Nouveau Manifest reçu : {manifest['filename']} ({manifest['size'] // 1024} KB) de {peer_id[:8]}")
         else:
             print(f"[!] [SYNC] Manifest invalide (signature KO) reçu de {peer_id[:8]}")
+            # Log de debug : comparer les hashs ou IDs si besoin
+            # print(f"DEBUG: sender_id={manifest['sender_id']} my_verify_of_sender={peer_id}")
+
 
     def _handle_chunk_req(self, peer_id, payload):
         """Répond à une demande de chunk."""
@@ -594,9 +597,9 @@ class DiscoveryNode:
             for pid in deleted:
                 print(f"[-] Pair déconnecté (timeout) : {pid}")
             
-            # Affichage de l'état de la table (très pratique pour S1)
-            print(f"\r--- Peer Table ({len(self.peer_table.get_all())} nœuds découverts) ---")
-            time.sleep(10)
+            # Affichage de l'état de la table moins fréquent (30s au lieu de 10s)
+            print(f"--- Peer Table ({len(self.peer_table.get_all())} nœuds découverts) ---")
+            time.sleep(30)
 
     def start_cli(self):
         """Interface de chat interactive en ligne de commande"""

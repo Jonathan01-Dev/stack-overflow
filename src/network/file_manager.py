@@ -46,8 +46,8 @@ class FileManager:
             "sender_id": crypto_manager.get_node_id()
         }
 
-        # Signature du manifest (sur le hash du contenu JSON)
-        manifest_content = json.dumps(manifest, sort_keys=True).encode('utf-8')
+        # Signature du manifest (sur le hash du contenu JSON standardisé)
+        manifest_content = json.dumps(manifest, sort_keys=True, separators=(',', ':')).encode('utf-8')
         manifest_hash = hashlib.sha256(manifest_content).digest()
         manifest["signature"] = crypto_manager.sign(manifest_hash).hex()
 
