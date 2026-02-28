@@ -15,6 +15,9 @@ class CryptoManager:
         self.verify_key = self.signing_key.verify_key
         self.public_key_hex = self.verify_key.encode(encoder=nacl.encoding.HexEncoder).decode('utf-8')
 
+    def get_node_id(self):
+        return self.public_key_hex
+
     def sign(self, message_bytes):
         return self.signing_key.sign(message_bytes).signature
 
