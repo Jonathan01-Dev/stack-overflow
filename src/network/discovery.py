@@ -26,6 +26,15 @@ from file_manager import FileManager
 from storage_manager import StorageManager
 from transfer_manager import TransferManager
 
+# Couleurs ANSI pour le CLI Premium
+CLR_RESET = "\033[0m"
+CLR_BOLD = "\033[1m"
+CLR_GREEN = "\033[92m"
+CLR_CYAN = "\033[96m"
+CLR_YELLOW = "\033[93m"
+CLR_RED = "\033[91m"
+CLR_BLUE = "\033[94m"
+
 MCAST_GRP = '239.255.42.99'
 MCAST_PORT = 6000
 TCP_PORT = int(os.environ.get("TCP_PORT", 7777))
