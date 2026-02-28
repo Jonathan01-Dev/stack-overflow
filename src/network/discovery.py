@@ -69,7 +69,9 @@ class DiscoveryNode:
         self.connections_lock = threading.Lock()
         
         self.file_mgr = FileManager()
-        self.storage_mgr = StorageManager()
+        # Isolation du stockage par port pour les tests locaux (ex: .archipel_7777)
+        storage_root = os.path.join(PROJECT_ROOT, f".archipel_{TCP_PORT}")
+        self.storage_mgr = StorageManager(root_dir=storage_root)
         self.transfer_mgr = TransferManager(self)
         
         # Manifests reçus du réseau : {file_id: manifest}
