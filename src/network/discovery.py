@@ -1,3 +1,4 @@
+# /share /home/koffi/Bureau/PHOTOS/BBOX EDF.jpg
 import argparse
 import socket
 import struct
@@ -601,7 +602,7 @@ class DiscoveryNode:
         def run():
             time.sleep(2) # Attendre que le serveur démarre
             print("\n" + "="*50)
-            print("🚀 TERMINAL CHAT ARCHIPEL (Sprint 2 - E2EE)")
+            print("🚀 TERMINAL CHAT ARCHIPEL (Sprint 3 - P2P Transfer)")
             print("Commandes :")
             print("  /list     - Liste les pairs sécurisés connectés")
             print("  /msg <txt> - Envoie un message à TOUS les pairs")
@@ -643,7 +644,7 @@ class DiscoveryNode:
                             print(f"[OK] Message envoyé à {len(targets)} pairs.")
                     
                     elif cmd.startswith("/share "):
-                        path = cmd[7:]
+                        path = cmd[7:].strip().replace("<", "").replace(">", "")
                         self.share_file(path)
 
                     elif cmd == "/ls":
@@ -685,7 +686,8 @@ class DiscoveryNode:
                                 print(f"  [{fid[:16]}] {info['manifest']['filename']} : {prog:.1f}% ({status})")
 
                     elif cmd.startswith("/download "):
-                        file_id_prefix = cmd[10:].strip()
+                        # Nettoyer l'id (enlever les espaces et les éventuels < > tapés par erreur)
+                        file_id_prefix = cmd[10:].strip().replace("<", "").replace(">", "")
                         # Trouver le file_id complet à partir du préfixe
                         target_fid = None
                         for fid in self.network_manifests:
