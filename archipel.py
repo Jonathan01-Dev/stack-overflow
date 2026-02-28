@@ -15,6 +15,8 @@ def main():
     parser.add_argument("--port", type=int, default=7777, help="Port TCP (7777 par défaut)")
     parser.add_argument("--key", type=str, default="node.key", help="Fichier de clé privée")
     parser.add_argument("--web-port", type=int, default=8080, help="Port du Dashboard Web (8080 par défaut)")
+    parser.add_argument("--no-ai", action="store_true", help="Désactiver les fonctionnalités IA (Gemini)")
+    parser.add_argument("--ai-key", type=str, default=None, help="Clé API Gemini (Optionnel, utilise GEMINI_API_KEY par défaut)")
     
     # Sous-commandes (optionnelles)
     subparsers = parser.add_subparsers(dest="command")
@@ -41,6 +43,15 @@ def main():
 
         print(f"\033[94m[*] Identité du nœud : {NODE_ID}\033[0m")
         node = DiscoveryNode()
+        
+        # Configuration de l'IA
+        node.ai_enabled = not args.no_ai
+        node.ai_key = args.ai_key
+        
+        if node.ai_enabled:
+            print(f"\033[92m[+] IA activée (Gemini Pro)\033[0m")
+        else:
+            print(f"\033[33m[*] IA désactivée (--no-ai)\033[0m")
         
         # Lancement des services réseau
         node.start_beacon()

@@ -36,6 +36,10 @@ Archipel est un protocole de communication P2P souverain, chiffré et décentral
     - **Historique Persistant** : Sauvegarde locale des messages reçus et envoyés par pair.
     - **Polling Temps Réel** : Mise à jour automatique des discussions sans rechargement.
     - **Partage de Fichiers** : Indexation et téléchargement décentralisé de fichiers à travers le réseau.
+- **Sprint 4.2 : Intégration Gemini & RAG** : 
+    - Liaison avec l'API Gemini Pro pour l'assistance intelligente.
+    - Système RAG (Retrieval-Augmented Generation) sur les discussions et les fichiers locaux.
+    - Isolation stricte et mode offline via le flag `--no-ai`.
 
 ---
 
@@ -49,9 +53,31 @@ pip install flask flask-cors pynacl
 
 ### 2. Lancer un nœud Archipel
 ```bash
-# Lance le noeud P2P et l'interface Web sur le port 8080
+# Lance le noeud P2P et l'interface Web sur le port 8080 avec IA activée
+# Assurez-vous d'avoir configuré votre clé dans le fichier .env
 python archipel.py --port 7777 --web-port 8080
+
+# Pour désactiver l'IA (Mode Offline/Privé)
+python archipel.py --no-ai
 ```
+
+### 3. Intelligence Artificielle (Gemini)
+L'intégration Gemini permet d'avoir un assistant intelligent capable de comprendre le contexte de vos conversations et de vos fichiers.
+
+**Configuration :**
+- Créez un fichier `.env` avec votre clé : `GEMINI_API_KEY=votre_cle_api`
+- Ou passez-la directement via `--ai-key <key>`
+
+**Commandes CLI :**
+- `--no-ai` : Désactive complètement toute connexion externe vers Gemini (Souveraineté totale).
+- `--ai-key <key>` : Utilise une clé API spécifique pour cette session.
+
+**Usage dans le Messenger :**
+- `/ask <question>` : Pose une question à l'IA en utilisant les derniers messages comme contexte.
+- `@archipel-ai <question>` : Identique à `/ask`.
+
+**Usage RAG (Files) :**
+- Dans l'onglet **Fichiers**, cliquez sur **"Indexer AI"**. Cela extrait le texte du fichier et l'ajoute au "cerveau" de l'IA pour que vous puissiez poser des questions spécifiques sur ce document.
 
 ### 3. Accéder à l'interface
 Ouvrez votre navigateur sur [http://localhost:8080](http://localhost:8080).

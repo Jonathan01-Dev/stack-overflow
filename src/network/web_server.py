@@ -1,4 +1,5 @@
 import os
+import sys
 import threading
 from flask import Flask, jsonify, request, send_from_directory
 
@@ -11,8 +12,17 @@ try:
 except ImportError:
     pass
 
+# Import du service AI
+try:
+    sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ai"))
+    from gemini_service import GeminiService
+except ImportError:
+    GeminiService = None
+
 # Référence globale au nœud Archipel
 _node = None
+_gemini = None
+_ai_files_context = {}  # file_id -> content (RAG pool)
 
 # Déterminer le chemin absolu du dossier 'web'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -161,6 +171,69 @@ def start_download(prefix):
     else:
         return jsonify({"success": False, "error": "File not found"}), 404
 
+# --- API AI (Sprint 4.2) ---
+
+@app.route('/api/ai/ask', methods=['POST'])
+def ai_ask():
+    if not _gemini or not _gemini.enabled:
+        return jsonify({"success": False, "error": "IA désactivée ou non configurée."}), 400
+    
+    data = request.json
+    peer_id = data.get('peer_id')  # Contexte de discussion
+    query = data.get('query')
+    
+    if not query:
+        return jsonify({"success": False, "error": "Question manquante."}), 400
+        
+    # 1. Récupérer l'historique de discussion (N derniers messages)
+    history = []
+    if peer_id:
+        with _node.history_lock:
+            history = _node.message_history.get(peer_id, [])[-10:] # 10 derniers
+            
+    # 2. Préparer le contexte des fichiers (RAG)
+    files_context = {}
+    for fid, content in _ai_files_context.items():
+        # On pourrait limiter la taille ici
+        files_context[fid[:8]] = content
+        
+    # 3. Appeler Gemini
+    result = _gemini.query(history, query, files_context)
+    
+    if "error" in result:
+        return jsonify({"success": False, "error": result["error"]}), 500
+        
+    return jsonify({"success": True, "response": result["text"]})
+
+@app.route('/api/ai/index_file/<fid>', methods=['POST'])
+def ai_index_file(fid):
+    if not _node: return jsonify({"success": False}), 500
+    
+    # Trouver le fichier localement
+    local_files = _node.storage_mgr.get_available_files()
+    if fid not in local_files:
+        return jsonify({"success": False, "error": "Fichier non trouvé localement."}), 404
+        
+    file_info = local_files[fid]
+    path = file_info["local_path"]
+    
+    if not path or not os.path.exists(path):
+        return jsonify({"success": False, "error": "Chemin du fichier invalide."}), 400
+        
+    try:
+        # Lire le fichier (on limite à 1MB pour le proto)
+        size = os.path.getsize(path)
+        if size > 1024 * 1024:
+            return jsonify({"success": False, "error": "Fichier trop volumineux (>1MB)."}), 400
+            
+        with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+            _ai_files_context[fid] = content
+            
+        return jsonify({"success": True, "indexed": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
@@ -179,9 +252,53 @@ def upload_file():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route('/api/settings/api_key', methods=['POST'])
+def save_api_key():
+    """Sauvegarde la clé API Gemini dans le fichier .env du projet."""
+    data = request.json
+    key = data.get('api_key', '').strip()
+    if not key:
+        return jsonify({"success": False, "error": "Clé vide."}), 400
+    try:
+        # Trouver le .env à la racine du projet (deux niveaux au-dessus de web_server.py)
+        project_root = os.path.dirname(os.path.dirname(BASE_DIR))
+        env_path = os.path.join(project_root, '.env')
+        
+        # Lire le .env existant
+        lines = []
+        if os.path.exists(env_path):
+            with open(env_path, 'r') as f:
+                lines = f.readlines()
+        
+        # Remplacer ou ajouter GEMINI_API_KEY
+        found = False
+        for i, line in enumerate(lines):
+            if line.startswith('GEMINI_API_KEY='):
+                lines[i] = f'GEMINI_API_KEY={key}\n'
+                found = True
+                break
+        if not found:
+            lines.append(f'GEMINI_API_KEY={key}\n')
+        
+        with open(env_path, 'w') as f:
+            f.writelines(lines)
+        
+        # Mettre à jour le service en mémoire immédiatement
+        if _gemini:
+            _gemini.api_key = key
+            _gemini.api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{_gemini.model}:generateContent?key={key}"
+        
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 def start_web_server(node, port=8080):
-    global _node
+    global _node, _gemini
     _node = node
+    
+    # Initialisation Gemini
+    if GeminiService:
+        _gemini = GeminiService(api_key=node.ai_key, enabled=node.ai_enabled)
     # Désactiver le log de Flask pour ne pas polluer la console du noeud
     import logging
     log = logging.getLogger('werkzeug')

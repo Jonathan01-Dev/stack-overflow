@@ -1,3 +1,6 @@
 pynacl
 python-dotenv
 cryptography
+flask
+flask-cors
+requests

@@ -4,20 +4,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Archipel | Messenger Sécurisé</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@700&display=swap"
+    <title>Archipel | Protocole P2P Souverain</title>
+    <meta name="description" content="Interface de gestion du noeud Archipel P2P chiffré">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;800&family=Outfit:wght@700;900&display=swap"
         rel="stylesheet">
     <style>
         :root {
             --sidebar-width: 260px;
-            --bg: #0f172a;
-            --glass: rgba(255, 255, 255, 0.03);
-            --glass-border: rgba(255, 255, 255, 0.08);
+            --bg: #080e1a;
+            --glass: rgba(255, 255, 255, 0.04);
+            --glass-border: rgba(255, 255, 255, 0.09);
             --accent-cyan: #22d3ee;
             --accent-green: #4ade80;
-            --text: #f8fafc;
-            --text-dim: #94a3b8;
-            --card-bg: rgba(15, 23, 42, 0.6);
+            --accent-purple: #a78bfa;
+            --text: #f0f6ff;
+            --text-dim: #64748b;
+            --card-bg: rgba(15, 23, 42, 0.7);
         }
 
         * {
@@ -30,38 +33,44 @@
             font-family: 'Inter', sans-serif;
             background: var(--bg);
             background-image:
-                radial-gradient(circle at 0% 0%, rgba(34, 211, 238, 0.05) 0%, transparent 50%),
-                radial-gradient(circle at 100% 100%, rgba(74, 222, 128, 0.05) 0%, transparent 50%);
+                radial-gradient(ellipse at 0% 0%, rgba(34, 211, 238, 0.07) 0%, transparent 55%),
+                radial-gradient(ellipse at 100% 100%, rgba(74, 222, 128, 0.06) 0%, transparent 55%);
             color: var(--text);
             height: 100vh;
             display: flex;
             overflow: hidden;
         }
 
-        /* Sidebar */
+        /* ===== SIDEBAR ===== */
         .sidebar {
             width: var(--sidebar-width);
-            background: rgba(0, 0, 0, 0.3);
-            backdrop-filter: blur(20px);
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(24px);
             border-right: 1px solid var(--glass-border);
             display: flex;
             flex-direction: column;
-            padding: 2rem 1.5rem;
+            padding: 1.8rem 1.4rem;
             z-index: 10;
+            flex-shrink: 0;
         }
 
         .logo-area {
-            margin-bottom: 3rem;
+            margin-bottom: 2.5rem;
         }
 
         .logo-text {
             font-family: 'Outfit', sans-serif;
-            font-size: 1.6rem;
+            font-size: 1.5rem;
             color: var(--accent-cyan);
             letter-spacing: -0.5px;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
+        }
+
+        .logo-sub {
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            margin-top: 2px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         .nav-menu {
@@ -70,16 +79,17 @@
         }
 
         .nav-item {
-            padding: 0.8rem 1rem;
-            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            border-radius: 10px;
             cursor: pointer;
             transition: all 0.2s;
             color: var(--text-dim);
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.3rem;
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 0.8rem;
             font-weight: 500;
+            font-size: 0.9rem;
         }
 
         .nav-item:hover {
@@ -88,22 +98,63 @@
         }
 
         .nav-item.active {
-            background: rgba(34, 211, 238, 0.1);
+            background: rgba(34, 211, 238, 0.12);
             color: var(--accent-cyan);
-            box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.2);
+            box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.25);
         }
 
-        /* Main Content */
+        .node-info {
+            margin-top: auto;
+            padding: 1rem;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            font-size: 0.72rem;
+        }
+
+        .node-info p {
+            margin-bottom: 0.3rem;
+            color: var(--text-dim);
+        }
+
+        .node-info .val {
+            color: var(--accent-cyan);
+            font-weight: 600;
+            font-family: monospace;
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            margin-right: 4px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: 0.4
+            }
+        }
+
+        /* ===== CONTENT ===== */
         .content-area {
             flex: 1;
-            padding: 2.5rem 3rem;
             overflow-y: auto;
             position: relative;
         }
 
         .page {
             display: none;
-            animation: slideUp 0.4s ease-out;
+            animation: slideUp 0.3s ease-out;
             height: 100%;
         }
 
@@ -115,70 +166,147 @@
         @keyframes slideUp {
             from {
                 opacity: 0;
-                transform: translateY(20px);
+                transform: translateY(16px)
             }
 
             to {
                 opacity: 1;
-                transform: translateY(0);
+                transform: translateY(0)
             }
         }
 
+        .page-inner {
+            padding: 2rem 2.5rem;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
         .section-header {
-            margin-bottom: 2rem;
+            margin-bottom: 1.8rem;
         }
 
         .section-title {
             font-family: 'Outfit', sans-serif;
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
+            font-size: 1.8rem;
+            margin-bottom: 0.3rem;
         }
 
         .section-subtitle {
             color: var(--text-dim);
-            font-size: 0.95rem;
+            font-size: 0.88rem;
         }
 
-        /* General Cards */
+        /* ===== CARDS ===== */
         .glass-card {
             background: var(--card-bg);
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(12px);
             border: 1px solid var(--glass-border);
-            border-radius: 20px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
+            border-radius: 18px;
+            padding: 1.4rem;
+            margin-bottom: 1.2rem;
+        }
+
+        .card-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+            margin-bottom: 0.5rem;
+        }
+
+        .card-value {
+            font-size: 1.6rem;
+            font-weight: 800;
         }
 
         .grid-container {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 1.2rem;
+            gap: 1rem;
         }
 
-        /* Messenger Full Interface */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        /* ===== BUTTONS ===== */
+        .btn {
+            padding: 0.65rem 1.3rem;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .btn-cyan {
+            background: var(--accent-cyan);
+            color: #040d18;
+        }
+
+        .btn-cyan:hover {
+            transform: scale(1.04);
+            box-shadow: 0 0 20px rgba(34, 211, 238, 0.35);
+        }
+
+        .btn-ghost {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            color: var(--text);
+        }
+
+        .btn-ghost:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .btn-sm {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.75rem;
+            border-radius: 7px;
+        }
+
+        /* ===== MESSENGER ===== */
         .messenger-layout {
             display: flex;
             flex: 1;
-            background: rgba(15, 23, 42, 0.4);
-            border-radius: 24px;
+            background: rgba(15, 23, 42, 0.5);
+            border-radius: 20px;
             border: 1px solid var(--glass-border);
             overflow: hidden;
-            margin-bottom: 2rem;
+            min-height: 0;
         }
 
         .messenger-aside {
-            width: 320px;
+            width: 300px;
             border-right: 1px solid var(--glass-border);
             display: flex;
             flex-direction: column;
-            background: rgba(0, 0, 0, 0.2);
+            background: rgba(0, 0, 0, 0.25);
+            flex-shrink: 0;
         }
 
         .aside-header {
-            padding: 1.5rem;
+            padding: 1.2rem 1.4rem;
             border-bottom: 1px solid var(--glass-border);
             font-weight: 700;
-            font-size: 1.1rem;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .peers-count {
+            font-size: 0.7rem;
+            background: rgba(34, 211, 238, 0.15);
+            color: var(--accent-cyan);
+            padding: 2px 8px;
+            border-radius: 20px;
         }
 
         .conv-list {
@@ -187,13 +315,13 @@
         }
 
         .conv-item {
-            padding: 1.2rem 1.5rem;
+            padding: 1rem 1.4rem;
             cursor: pointer;
             border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-            transition: 0.2s;
+            transition: 0.15s;
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 0.9rem;
         }
 
         .conv-item:hover {
@@ -202,20 +330,21 @@
 
         .conv-item.active {
             background: rgba(34, 211, 238, 0.08);
-            border-left: 4px solid var(--accent-cyan);
+            border-left: 3px solid var(--accent-cyan);
         }
 
         .avatar {
-            width: 45px;
-            height: 45px;
+            width: 42px;
+            height: 42px;
             border-radius: 50%;
-            background: linear-gradient(45deg, var(--accent-cyan), var(--accent-green));
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 800;
-            color: var(--bg);
-            font-size: 0.8rem;
+            color: #040d18;
+            font-size: 0.78rem;
+            flex-shrink: 0;
         }
 
         .conv-info {
@@ -225,28 +354,38 @@
 
         .conv-name {
             font-weight: 600;
-            font-size: 0.9rem;
-            margin-bottom: 0.2rem;
-        }
-
-        .conv-last {
-            font-size: 0.75rem;
-            color: var(--text-dim);
+            font-size: 0.85rem;
+            margin-bottom: 0.15rem;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
 
+        .conv-sub {
+            font-size: 0.72rem;
+            color: var(--text-dim);
+        }
+
+        .badge-trusted {
+            font-size: 0.58rem;
+            background: var(--accent-green);
+            color: #040d18;
+            padding: 1px 5px;
+            border-radius: 4px;
+            vertical-align: middle;
+            margin-left: 4px;
+        }
+
+        /* ===== CHAT ===== */
         .chat-main {
             flex: 1;
             display: flex;
             flex-direction: column;
-            background: url('https://www.transparenttextures.com/patterns/carbon-fibre.png');
-            /* Subtle texture */
+            min-width: 0;
         }
 
         .chat-header {
-            padding: 1rem 1.5rem;
+            padding: 1rem 1.4rem;
             border-bottom: 1px solid var(--glass-border);
             background: rgba(0, 0, 0, 0.3);
             display: flex;
@@ -254,79 +393,109 @@
             gap: 1rem;
         }
 
+        .chat-header-info {
+            flex: 1;
+        }
+
+        .chat-header-name {
+            font-weight: 700;
+            font-size: 0.95rem;
+        }
+
+        .chat-header-status {
+            font-size: 0.68rem;
+            color: var(--accent-cyan);
+        }
+
         .chat-messages {
             flex: 1;
-            padding: 1.5rem;
+            padding: 1.2rem;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 0.8rem;
+            gap: 0.6rem;
         }
 
         .bubble {
-            padding: 0.7rem 1.1rem;
-            border-radius: 18px;
-            max-width: 80%;
-            font-size: 0.9rem;
-            line-height: 1.4;
-            position: relative;
+            padding: 0.65rem 1rem;
+            border-radius: 16px;
+            max-width: 78%;
+            font-size: 0.88rem;
+            line-height: 1.5;
+            word-break: break-word;
         }
 
         .bubble-out {
             align-self: flex-end;
             background: var(--accent-cyan);
-            color: var(--bg);
+            color: #040d18;
             border-bottom-right-radius: 4px;
+            font-weight: 500;
         }
 
         .bubble-in {
             align-self: flex-start;
-            background: rgba(255, 255, 255, 0.08);
-            color: white;
+            background: rgba(255, 255, 255, 0.07);
             border-bottom-left-radius: 4px;
             border: 1px solid var(--glass-border);
         }
 
+        .bubble-ai {
+            align-self: flex-start;
+            background: linear-gradient(135deg, rgba(34, 211, 238, 0.18), rgba(167, 139, 250, 0.18));
+            border: 1px solid rgba(34, 211, 238, 0.4);
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 0 20px rgba(34, 211, 238, 0.08);
+        }
+
+        .bubble-ai-header {
+            font-size: 0.65rem;
+            font-weight: 800;
+            color: var(--accent-cyan);
+            margin-bottom: 0.4rem;
+            letter-spacing: 0.5px;
+        }
+
+        .bubble-sys {
+            align-self: center;
+            background: rgba(167, 139, 250, 0.12);
+            color: var(--accent-purple);
+            font-size: 0.75rem;
+            padding: 0.3rem 1rem;
+            border-radius: 20px;
+            border: 1px solid rgba(167, 139, 250, 0.2);
+        }
+
+        .msg-time {
+            font-size: 0.62rem;
+            opacity: 0.5;
+            margin-top: 2px;
+        }
+
         .chat-input-container {
-            padding: 1.2rem;
+            padding: 1rem;
             background: rgba(0, 0, 0, 0.4);
             display: flex;
-            gap: 1rem;
+            gap: 0.7rem;
+            align-items: center;
         }
 
         .input-box {
             flex: 1;
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(255, 255, 255, 0.06);
             border: 1px solid var(--glass-border);
-            border-radius: 14px;
-            padding: 0.8rem 1.2rem;
-            color: white;
+            border-radius: 12px;
+            padding: 0.75rem 1.1rem;
+            color: var(--text);
             outline: none;
-            transition: 0.3s;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.88rem;
+            transition: 0.2s;
         }
 
         .input-box:focus {
             border-color: var(--accent-cyan);
-            background: rgba(255, 255, 255, 0.08);
-        }
-
-        .btn {
-            padding: 0.7rem 1.5rem;
-            border-radius: 12px;
-            border: none;
-            cursor: pointer;
-            font-weight: 700;
-            transition: 0.2s;
-        }
-
-        .btn-send {
-            background: var(--accent-cyan);
-            color: var(--bg);
-        }
-
-        .btn-send:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 15px rgba(34, 211, 238, 0.4);
+            background: rgba(255, 255, 255, 0.09);
         }
 
         .empty-state {
@@ -337,175 +506,493 @@
             justify-content: center;
             color: var(--text-dim);
             text-align: center;
+            gap: 0.6rem;
         }
 
-        .badge-trusted {
-            font-size: 0.6rem;
-            background: var(--accent-green);
-            color: var(--bg);
-            padding: 1px 4px;
-            border-radius: 4px;
-            vertical-align: middle;
-            margin-left: 5px;
+        .empty-icon {
+            font-size: 3.5rem;
+            opacity: 0.15;
+        }
+
+        /* ===== FORMS ===== */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-label {
+            font-size: 0.78rem;
+            color: var(--text-dim);
+            margin-bottom: 0.4rem;
+            display: block;
+        }
+
+        .form-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            padding: 0.7rem 1rem;
+            color: var(--text);
+            outline: none;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.88rem;
+            transition: 0.2s;
+        }
+
+        .form-input:focus {
+            border-color: var(--accent-cyan);
+        }
+
+        .alert {
+            padding: 0.8rem 1rem;
+            border-radius: 10px;
+            font-size: 0.82rem;
+            margin-bottom: 1rem;
+        }
+
+        .alert-success {
+            background: rgba(74, 222, 128, 0.12);
+            border: 1px solid rgba(74, 222, 128, 0.3);
+            color: var(--accent-green);
+        }
+
+        .alert-error {
+            background: rgba(248, 113, 113, 0.12);
+            border: 1px solid rgba(248, 113, 113, 0.3);
+            color: #f87171;
+        }
+
+        .alert-info {
+            background: rgba(34, 211, 238, 0.10);
+            border: 1px solid rgba(34, 211, 238, 0.25);
+            color: var(--accent-cyan);
+        }
+
+        /* TAG */
+        .tag {
+            display: inline-block;
+            font-size: 0.68rem;
+            padding: 2px 7px;
+            border-radius: 5px;
+            font-weight: 600;
+        }
+
+        .tag-cyan {
+            background: rgba(34, 211, 238, 0.15);
+            color: var(--accent-cyan);
+        }
+
+        .tag-green {
+            background: rgba(74, 222, 128, 0.15);
+            color: var(--accent-green);
+        }
+
+        .tag-local {
+            background: rgba(74, 222, 128, 0.12);
+            color: var(--accent-green);
+            border: 1px solid rgba(74, 222, 128, 0.25);
+        }
+
+        .tag-net {
+            background: rgba(34, 211, 238, 0.12);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(34, 211, 238, 0.25);
+        }
+
+        /* FILE CARD */
+        .file-card {
+            background: var(--card-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 1.2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+        }
+
+        .file-name {
+            font-weight: 700;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-meta {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-top: 0.3rem;
+        }
+
+        /* SPINNER */
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-top-color: var(--accent-cyan);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* AI indicator on input */
+        .ai-indicator {
+            font-size: 0.68rem;
+            color: var(--accent-cyan);
+            padding: 0.3rem 0.6rem;
+            border-radius: 8px;
+            background: rgba(34, 211, 238, 0.1);
+            border: 1px solid rgba(34, 211, 238, 0.2);
+            display: none;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+        }
+
+        .ai-indicator.visible {
+            display: flex;
         }
     </style>
 </head>
 
 <body>
-
     <div class="sidebar">
         <div class="logo-area">
             <div class="logo-text">⚓ ARCHIPEL</div>
+            <div class="logo-sub">Protocole P2P Souverain v1.0</div>
         </div>
         <ul class="nav-menu">
-            <li class="nav-item" onclick="switchPage('dashboard', this)">🛸 Dashboard</li>
-            <li class="nav-item active" onclick="switchPage('messenger', this)">💬 Messenger</li>
-            <li class="nav-item" onclick="switchPage('files', this)">📂 Fichiers</li>
-            <li class="nav-item" onclick="switchPage('wot', this)">🔰 Web of Trust</li>
-            <li class="nav-item" onclick="switchPage('settings', this)">⚙️ Réglages</li>
+            <li class="nav-item active" id="nav-dashboard" onclick="switchPage('dashboard', this)">🛸 Dashboard</li>
+            <li class="nav-item" id="nav-messenger" onclick="switchPage('messenger', this)">💬 Messenger</li>
+            <li class="nav-item" id="nav-files" onclick="switchPage('files', this)">📂 Fichiers</li>
+            <li class="nav-item" id="nav-wot" onclick="switchPage('wot', this)">🔰 Web of Trust</li>
+            <li class="nav-item" id="nav-ai" onclick="switchPage('ai', this)">✨ Archipel-AI</li>
+            <li class="nav-item" id="nav-settings" onclick="switchPage('settings', this)">⚙️ Réglages</li>
         </ul>
-        <div style="margin-top: auto; font-size: 0.75rem; color: var(--text-dim)">
-            <p>Mon ID: <span id="my-node-id" style="color:var(--accent-cyan)">...</span></p>
-            <p>Status: <span style="color:var(--accent-green)">● EN LIGNE</span></p>
+        <div class="node-info">
+            <p>Mon Identité</p>
+            <div class="val" id="sidebar-node-id">Chargement...</div>
+            <p style="margin-top:0.5rem">Status</p>
+            <div><span class="status-dot"></span><span style="color:var(--accent-green); font-size:0.72rem">En
+                    ligne</span></div>
         </div>
     </div>
 
     <div class="content-area">
 
-        <!-- MESSENGER PAGE -->
-        <div id="page-messenger" class="page active">
-            <div class="section-header">
-                <h1 class="section-title">💬 Messenger</h1>
-                <p class="section-subtitle">Communication souveraine, chiffrée de bout en bout et sans intermédiaire.
-                </p>
+        <!-- ======== DASHBOARD ======== -->
+        <div id="page-dashboard" class="page active">
+            <div class="page-inner">
+                <div class="section-header">
+                    <h1 class="section-title">🛸 Dashboard</h1>
+                    <p class="section-subtitle">Vue d'ensemble du nœud Archipel</p>
+                </div>
+                <div class="stats-grid">
+                    <div class="glass-card" style="margin-bottom:0">
+                        <div class="card-label">Pairs Connectés</div>
+                        <div class="card-value" id="stat-peers">—</div>
+                    </div>
+                    <div class="glass-card" style="margin-bottom:0">
+                        <div class="card-label">Fichiers Locaux</div>
+                        <div class="card-value" id="stat-files">—</div>
+                    </div>
+                    <div class="glass-card" style="margin-bottom:0">
+                        <div class="card-label">Port TCP</div>
+                        <div class="card-value" id="stat-port">—</div>
+                    </div>
+                    <div class="glass-card" style="margin-bottom:0">
+                        <div class="card-label">Transferts Actifs</div>
+                        <div class="card-value" id="stat-transfers">—</div>
+                    </div>
+                </div>
+                <div class="glass-card">
+                    <div class="card-label">Mon Identité Cryptographique</div>
+                    <div id="dash-node-id"
+                        style="font-family:monospace; font-size:0.75rem; color:var(--accent-cyan); word-break:break-all; margin-top:0.3rem">
+                        ...</div>
+                </div>
+                <div class="glass-card">
+                    <div class="card-label" style="margin-bottom:0.8rem">Transferts en cours</div>
+                    <div id="dash-transfers">
+                        <span style="color:var(--text-dim); font-size:0.85rem">Aucun transfert actif.</span>
+                    </div>
+                </div>
+                <div class="glass-card">
+                    <div class="card-label" style="margin-bottom:0.8rem">🔒 Protocole de Sécurité</div>
+                    <div style="display:flex; gap:0.6rem; flex-wrap:wrap;">
+                        <span class="tag tag-cyan">Ed25519 Identité</span>
+                        <span class="tag tag-cyan">X25519 DH Exchange</span>
+                        <span class="tag tag-cyan">AES-256-GCM E2EE</span>
+                        <span class="tag tag-green">Multicast Discovery</span>
+                        <span class="tag tag-green">Web of Trust</span>
+                        <span class="tag tag-green">Gemini RAG</span>
+                    </div>
+                </div>
             </div>
+        </div>
 
-            <div class="messenger-layout">
-                <!-- PANNEAU GAUCHE : LISTE DES PAIRS -->
-                <aside class="messenger-aside">
-                    <div class="aside-header">Discussions</div>
-                    <div id="conv-list" class="conv-list">
-                        <!-- Peuplé par JS -->
-                        <div style="padding: 2rem; text-align: center; color: var(--text-dim); font-size: 0.85rem;">
-                            Recherche de pairs...</div>
-                    </div>
-                </aside>
-
-                <!-- PANNEAU DROIT : ZONE DE CHAT -->
-                <main class="chat-main" id="chat-container">
-                    <div id="chat-empty" class="empty-state">
-                        <div style="font-size: 4rem; opacity: 0.2; margin-bottom: 1rem;">⚓</div>
-                        <h3>Prêt à communiquer ?</h3>
-                        <p style="font-size: 0.9rem; max-width: 250px; margin-top: 0.5rem;">Sélectionnez un pair à
-                            gauche pour ouvrir une session de chat chiffrée.</p>
-                    </div>
-
-                    <div id="chat-active" style="display: none; flex-direction: column; height: 100%;">
-                        <div class="chat-header">
-                            <div class="avatar" id="active-avatar">?</div>
-                            <div>
-                                <div id="active-name" style="font-weight: 700;">Désiré</div>
-                                <div
-                                    style="font-size: 0.7rem; color: var(--accent-cyan); display: flex; align-items: center; gap: 4px;">
-                                    <span
-                                        style="display:inline-block; width:6px; height:6px; background:var(--accent-cyan); border-radius:50%"></span>
-                                    CHIFFrÉ PAR E2EE (X25519)
+        <!-- ======== MESSENGER ======== -->
+        <div id="page-messenger" class="page">
+            <div class="page-inner" style="padding-bottom:0">
+                <div class="section-header" style="margin-bottom:1rem">
+                    <h1 class="section-title">💬 Messenger</h1>
+                    <p class="section-subtitle">E2EE · Utilisez <code style="color:var(--accent-cyan)">/ask</code> ou
+                        <code style="color:var(--accent-cyan)">@archipel-ai</code> pour l'IA</p>
+                </div>
+                <div class="messenger-layout">
+                    <aside class="messenger-aside">
+                        <div class="aside-header">
+                            Discussions
+                            <span class="peers-count" id="peers-badge">0</span>
+                        </div>
+                        <div id="conv-list" class="conv-list">
+                            <div style="padding:2rem;text-align:center;color:var(--text-dim);font-size:0.82rem">
+                                Recherche de pairs...</div>
+                        </div>
+                    </aside>
+                    <main class="chat-main">
+                        <div id="chat-empty" class="empty-state">
+                            <div class="empty-icon">⚓</div>
+                            <h3 style="font-size:1rem">Prêt à communiquer ?</h3>
+                            <p style="font-size:0.82rem; max-width:220px; color:var(--text-dim)">Sélectionnez un pair à
+                                gauche pour ouvrir une session chiffrée.</p>
+                        </div>
+                        <div id="chat-active" style="display:none; flex-direction:column; height:100%">
+                            <div class="chat-header">
+                                <div class="avatar" id="active-avatar">?</div>
+                                <div class="chat-header-info">
+                                    <div class="chat-header-name" id="active-name">—</div>
+                                    <div class="chat-header-status">● CHIFFRÉ E2EE (X25519 + AES-256-GCM)</div>
                                 </div>
                             </div>
+                            <div class="chat-messages" id="chat-messages"></div>
+                            <div style="padding:0.5rem 1rem 0; display:flex; justify-content:flex-end;">
+                                <div class="ai-indicator" id="ai-indicator">✨ Mode IA actif</div>
+                            </div>
+                            <div class="chat-input-container">
+                                <input type="text" id="chat-input" class="input-box"
+                                    placeholder="Message... ou /ask pour l'IA" oninput="detectAIMode(this.value)"
+                                    onkeypress="if(event.key==='Enter') sendChatMessage()">
+                                <button class="btn btn-cyan" onclick="sendChatMessage()">Envoyer</button>
+                            </div>
                         </div>
-                        <div class="chat-messages" id="chat-messages">
-                            <!-- Les bulles de message iront ici -->
-                        </div>
-                        <div class="chat-input-container">
-                            <input type="text" id="chat-input" class="input-box" placeholder="Votre message secret..."
-                                onkeypress="if(event.key==='Enter') sendChatMessage()">
-                            <button class="btn btn-send" onclick="sendChatMessage()">Envoyer</button>
-                        </div>
-                    </div>
-                </main>
+                    </main>
+                </div>
             </div>
         </div>
 
-        <!-- AUTRES PAGES (Dashboard, Fichiers, etc.) -->
-        <div id="page-dashboard" class="page">
-            <div class="section-header">
-                <h1 class="section-title">🛸 Dashboard</h1>
-            </div>
-            <div class="glass-card">Statistiques du nœud à venir...</div>
-        </div>
+        <!-- ======== FICHIERS ======== -->
         <div id="page-files" class="page">
-            <div class="section-header">
-                <h1 class="section-title">📂 Fichiers</h1>
+            <div class="page-inner">
+                <div class="section-header">
+                    <h1 class="section-title">📂 Fichiers</h1>
+                    <p class="section-subtitle">Partagez et téléchargez des fichiers sur le réseau P2P</p>
+                </div>
+                <div class="glass-card">
+                    <div class="card-label" style="margin-bottom:0.8rem">Partager un fichier local</div>
+                    <div style="display:flex; gap:0.8rem; align-items:center; flex-wrap:wrap;">
+                        <input type="file" id="share-file-input" style="display:none"
+                            onchange="uploadAndShareFile(this)">
+                        <button class="btn btn-cyan" onclick="document.getElementById('share-file-input').click()">📤
+                            Choisir un fichier à partager</button>
+                        <span style="font-size:0.8rem; color:var(--text-dim)">Le fichier sera indexé sur le réseau et
+                            disponible pour les pairs</span>
+                    </div>
+                    <div id="upload-status" style="margin-top:0.8rem"></div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                    <div>
+                        <div style="font-size:0.8rem; font-weight:700; margin-bottom:0.8rem; color:var(--accent-green)">
+                            📁 Mes Fichiers (Locaux)</div>
+                        <div id="files-local"></div>
+                    </div>
+                    <div>
+                        <div style="font-size:0.8rem; font-weight:700; margin-bottom:0.8rem; color:var(--accent-cyan)">
+                            🌐 Fichiers Réseau</div>
+                        <div id="files-network"></div>
+                    </div>
+                </div>
             </div>
-            <div id="files-grid" class="grid-container"></div>
-        </div>
-        <div id="page-wot" class="page">
-            <div class="section-header">
-                <h1 class="section-title">🔰 Web of Trust</h1>
-            </div>
-            <div id="wot-grid" class="grid-container"></div>
-        </div>
-        <div id="page-settings" class="page">
-            <div class="section-header">
-                <h1 class="section-title">⚙️ Réglages</h1>
-            </div>
-            <div id="settings-card" class="glass-card">Configuration technique...</div>
         </div>
 
-    </div>
+        <!-- ======== WEB OF TRUST ======== -->
+        <div id="page-wot" class="page">
+            <div class="page-inner">
+                <div class="section-header">
+                    <h1 class="section-title">🔰 Web of Trust</h1>
+                    <p class="section-subtitle">Approuvez manuellement vos pairs pour valider leur identité</p>
+                </div>
+                <div id="wot-grid" class="grid-container">
+                    <div class="glass-card" style="color:var(--text-dim); font-size:0.85rem">Chargement des pairs...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ======== ARCHIPEL-AI ======== -->
+        <div id="page-ai" class="page">
+            <div class="page-inner">
+                <div class="section-header">
+                    <h1 class="section-title">✨ Archipel-AI</h1>
+                    <p class="section-subtitle">Assistant RAG contextuel · Posez des questions sur vos discussions et
+                        fichiers indexés</p>
+                </div>
+                <div class="glass-card">
+                    <div class="card-label" style="margin-bottom:0.8rem">Session de discussion globale</div>
+                    <div id="ai-chat-box"
+                        style="min-height:250px; max-height:350px; overflow-y:auto; display:flex; flex-direction:column; gap:0.6rem; margin-bottom:1rem; padding:0.5rem;">
+                        <div class="bubble bubble-sys">Bonjour ! Posez-moi une question sur vos discussions ou vos
+                            fichiers indexés.</div>
+                    </div>
+                    <div style="display:flex; gap:0.7rem;">
+                        <input type="text" id="ai-ask-input" class="form-input"
+                            placeholder="Ex: Résume les fichiers indexés, Que disent les messages récents ?"
+                            onkeypress="if(event.key==='Enter') askGlobalAI()">
+                        <button class="btn btn-cyan" onclick="askGlobalAI()">Demander</button>
+                    </div>
+                </div>
+                <div class="glass-card">
+                    <div class="card-label" style="margin-bottom:0.8rem">📚 Fichiers indexés dans l'IA (RAG)</div>
+                    <div id="ai-indexed-files">
+                        <span style="color:var(--text-dim); font-size:0.82rem">Aucun fichier indexé. Allez dans
+                            "Fichiers" et cliquez "Indexer AI".</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ======== SETTINGS ======== -->
+        <div id="page-settings" class="page">
+            <div class="page-inner">
+                <div class="section-header">
+                    <h1 class="section-title">⚙️ Réglages</h1>
+                    <p class="section-subtitle">Configuration de votre nœud Archipel</p>
+                </div>
+                <div class="glass-card">
+                    <div class="card-label" style="margin-bottom:1rem">🤖 Clé API Gemini</div>
+                    <div id="settings-alert"></div>
+                    <div class="form-group">
+                        <label class="form-label">GEMINI_API_KEY</label>
+                        <input type="password" id="settings-api-key" class="form-input" placeholder="AIzaSy...">
+                    </div>
+                    <button class="btn btn-cyan" onclick="saveApiKey()">Sauvegarder la clé</button>
+                    <p style="margin-top:0.8rem; font-size:0.75rem; color:var(--text-dim)">
+                        La clé sera stockée dans le fichier <code>.env</code> du nœud. Obtenez votre clé sur
+                        <a href="https://aistudio.google.com/app/apikey" target="_blank"
+                            style="color:var(--accent-cyan)">Google AI Studio</a>.
+                    </p>
+                </div>
+                <div class="glass-card">
+                    <div class="card-label" style="margin-bottom:0.8rem">📡 Comment rejoindre l'équipe</div>
+                    <div class="alert alert-info" style="margin-bottom:0">
+                        <strong>Sur le même réseau local (Wi-Fi / Hotspot / Câble) :</strong><br>
+                        Chaque membre doit lancer : <code>python archipel.py --port 7777 --web-port 8080</code><br><br>
+                        La découverte est automatique via Multicast UDP. Les nœuds se trouvent en quelques
+                        secondes.<br><br>
+                        <strong>Ports à autoriser :</strong> UDP 6000 (découverte) · TCP 7777 (communication)
+                    </div>
+                </div>
+                <div class="glass-card">
+                    <div class="card-label" style="margin-bottom:0.8rem">🔑 Générer une nouvelle identité</div>
+                    <p style="font-size:0.82rem; color:var(--text-dim); margin-bottom:0.8rem">Crée un nouveau fichier
+                        <code>node.key</code> avec une clé Ed25519 unique.</p>
+                    <code style="font-size:0.82rem; color:var(--accent-cyan)">python archipel.py gen-key</code>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- end content-area -->
 
     <script>
         const API = '/api';
         let currentPeer = null;
         let pollTimer = null;
+        let aiIndexedFiles = {};  // fid -> filename
 
+        // ===== PAGE ROUTING =====
         function switchPage(pageId, el) {
             document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
             el.classList.add('active');
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
             document.getElementById('page-' + pageId).classList.add('active');
 
-            if (pageId === 'messenger') { startPolling(); } else { stopPolling(); }
+            if (pageId === 'messenger') startPolling();
+            else stopPolling();
+            if (pageId === 'files') updateFiles();
+            if (pageId === 'wot') updateWot();
+            if (pageId === 'ai') updateAIPage();
         }
 
+        // ===== STATUS & PEERS =====
         async function updateStatus() {
             try {
-                const res = await fetch(`${API}/status`);
-                const s = await res.json();
-                document.getElementById('my-node-id').textContent = s.node_id.substring(0, 8);
-
-                // Peupler la liste des pairs à gauche
-                const pRes = await fetch(`${API}/peers`);
+                const [sRes, pRes] = await Promise.all([fetch(`${API}/status`), fetch(`${API}/peers`)]);
+                const s = await sRes.json();
                 const peers = await pRes.json();
-                const list = document.getElementById('conv-list');
 
+                document.getElementById('sidebar-node-id').textContent = s.node_id ? s.node_id.substring(0, 20) + '...' : '—';
+                document.getElementById('dash-node-id').textContent = s.node_id || '—';
+                document.getElementById('stat-peers').textContent = peers.length;
+                document.getElementById('stat-files').textContent = s.local_files_count || 0;
+                document.getElementById('stat-port').textContent = s.tcp_port || '—';
+                document.getElementById('stat-transfers').textContent = (s.downloads || []).length;
+                document.getElementById('peers-badge').textContent = peers.length;
+
+                // Transfers
+                const tEl = document.getElementById('dash-transfers');
+                if (s.downloads && s.downloads.length > 0) {
+                    tEl.innerHTML = s.downloads.map(d => `
+                        <div style="display:flex; align-items:center; gap:0.8rem; margin-bottom:0.6rem;">
+                            <span style="font-size:0.78rem; min-width:120px">${d.filename}</span>
+                            <div style="flex:1; background:rgba(255,255,255,0.1); border-radius:4px; height:6px;">
+                                <div style="width:${d.progress}%; background:var(--accent-cyan); height:6px; border-radius:4px; transition:width 0.3s"></div>
+                            </div>
+                            <span style="font-size:0.7rem; color:var(--accent-cyan)">${d.progress}%</span>
+                        </div>
+                    `).join('');
+                } else {
+                    tEl.innerHTML = '<span style="color:var(--text-dim); font-size:0.85rem">Aucun transfert actif.</span>';
+                }
+
+                // Peer list
+                const list = document.getElementById('conv-list');
                 if (peers.length === 0) {
-                    list.innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--text-dim); font-size: 0.85rem;">Aucun pair actif.</div>';
+                    list.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-dim);font-size:0.82rem">Aucun pair actif.<br><small>Assurez-vous d\'être sur le même réseau local.</small></div>';
                 } else {
                     list.innerHTML = peers.map(p => `
                         <div class="conv-item ${currentPeer === p.id ? 'active' : ''}" onclick="openConversation('${p.id}')">
                             <div class="avatar">${p.id.substring(0, 2).toUpperCase()}</div>
                             <div class="conv-info">
-                                <div class="conv-name">${p.id.substring(0, 12)}... ${p.trusted ? '<span class="badge-trusted">TRUSTED</span>' : ''}</div>
-                                <div class="conv-last">${p.address}:${p.port}</div>
+                                <div class="conv-name">${p.id.substring(0, 14)}...${p.trusted ? '<span class="badge-trusted">TRUSTED</span>' : ''}</div>
+                                <div class="conv-sub">● Connecté</div>
                             </div>
                         </div>
                     `).join('');
                 }
-            } catch (e) { console.error("Poll error", e); }
+            } catch (e) { console.warn("Poll error:", e); }
         }
 
+        // ===== MESSENGER =====
         function openConversation(pid) {
             currentPeer = pid;
             document.getElementById('chat-empty').style.display = 'none';
             document.getElementById('chat-active').style.display = 'flex';
-            document.getElementById('active-name').textContent = "Pair " + pid.substring(0, 16);
+            document.getElementById('active-name').textContent = 'Pair ' + pid.substring(0, 16) + '...';
             document.getElementById('active-avatar').textContent = pid.substring(0, 2).toUpperCase();
-
-            // Forcer le rafraîchissement des messages
             loadMessages();
-            // Mettre à jour l'état visuel de la liste
-            document.querySelectorAll('.conv-item').forEach(c => c.classList.remove('active'));
+            updateStatus();
         }
 
         async function loadMessages() {
@@ -514,17 +1001,22 @@
                 const res = await fetch(`${API}/messages/${currentPeer.substring(0, 8)}`);
                 const messages = await res.json();
                 const box = document.getElementById('chat-messages');
-
-                // On compare par longueur pour éviter de tout redessiner si pas de changement
                 if (messages.length !== box.children.length) {
-                    box.innerHTML = messages.map(m => `
-                        <div class="bubble ${m.type === 'out' ? 'bubble-out' : 'bubble-in'}">
-                            ${m.text}
-                        </div>
-                    `).join('');
+                    box.innerHTML = messages.map(m => {
+                        let cls = m.type === 'out' ? 'bubble-out' : 'bubble-in';
+                        if (m.sender === 'AI') cls = 'bubble-ai';
+                        const time = m.timestamp ? new Date(m.timestamp * 1000).toLocaleTimeString('fr', {hour:'2-digit', minute:'2-digit'}) : '';
+                        const aiHeader = cls === 'bubble-ai' ? `<div class="bubble-ai-header">✨ ARCHIPEL-AI</div>` : '';
+                        return `<div class="bubble ${cls}">${aiHeader}${escapeHtml(m.text).replace(/\n/g,'<br>')}<div class="msg-time">${time}</div></div>`;
+                    }).join('');
                     box.scrollTop = box.scrollHeight;
                 }
-            } catch (e) { }
+            } catch (e) {}
+        }
+
+        function detectAIMode(val) {
+            const isAI = val.startsWith('/ask') || val.includes('@archipel-ai');
+            document.getElementById('ai-indicator').classList.toggle('visible', isAI);
         }
 
         async function sendChatMessage() {
@@ -532,23 +1024,247 @@
             const txt = input.value.trim();
             if (!txt || !currentPeer) return;
 
-            input.value = "";
+            const isAI = txt.startsWith('/ask') || txt.includes('@archipel-ai');
+
+            if (isAI) {
+                const query = txt.replace('/ask', '').replace(/@archipel-ai/g, '').trim();
+                const box = document.getElementById('chat-messages');
+                const time = new Date().toLocaleTimeString('fr', {hour:'2-digit', minute:'2-digit'});
+                box.innerHTML += `<div class="bubble bubble-out">${escapeHtml(txt)}<div class="msg-time">${time}</div></div>`;
+                box.innerHTML += `<div class="bubble bubble-sys"><span class="spinner"></span> Archipel-AI réfléchit...</div>`;
+                box.scrollTop = box.scrollHeight;
+                input.value = '';
+                document.getElementById('ai-indicator').classList.remove('visible');
+
+                try {
+                    const res = await fetch(`${API}/ai/ask`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({peer_id: currentPeer, query})
+                    });
+                    const result = await res.json();
+                    // Remove spinner
+                    const spinners = box.querySelectorAll('.bubble-sys');
+                    spinners[spinners.length - 1]?.remove();
+
+                    if (result.success) {
+                        const rtime = new Date().toLocaleTimeString('fr', {hour:'2-digit', minute:'2-digit'});
+                        box.innerHTML += `<div class="bubble bubble-ai"><div class="bubble-ai-header">✨ ARCHIPEL-AI</div>${escapeHtml(result.response).replace(/\n/g,'<br>')}<div class="msg-time">${rtime}</div></div>`;
+                    } else {
+                        box.innerHTML += `<div class="bubble bubble-sys" style="color:#f87171">⚠ ${escapeHtml(result.error)}</div>`;
+                    }
+                } catch (e) {
+                    const spinners = box.querySelectorAll('.bubble-sys');
+                    spinners[spinners.length - 1]?.remove();
+                    box.innerHTML += `<div class="bubble bubble-sys" style="color:#f87171">⚠ Impossible de contacter l'IA.</div>`;
+                }
+                box.scrollTop = box.scrollHeight;
+                return;
+            }
+
+            input.value = '';
             try {
                 await fetch(`${API}/msg`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ target: currentPeer, text: txt })
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({target: currentPeer, text: txt})
                 });
-                loadMessages(); // Directement charger après envoi
+                loadMessages();
             } catch (e) { alert("Erreur d'envoi"); }
+        }
+
+        // ===== FILES =====
+        async function updateFiles() {
+            try {
+                const res = await fetch(`${API}/files`);
+                const data = await res.json();
+                const localEl = document.getElementById('files-local');
+                const netEl = document.getElementById('files-network');
+
+                if (data.local.length === 0) {
+                    localEl.innerHTML = '<div style="color:var(--text-dim); font-size:0.82rem">Aucun fichier local.</div>';
+                } else {
+                    localEl.innerHTML = data.local.map(f => `
+                        <div class="file-card" style="margin-bottom:0.8rem">
+                            <div class="file-name" title="${f.filename}">📄 ${f.filename}</div>
+                            <div class="file-meta">${f.size_kb} KB <span class="tag tag-local">Local</span></div>
+                            <div class="file-actions">
+                                <button class="btn btn-ghost btn-sm" onclick="indexFileForAI('${f.id}', '${f.filename}')">🪄 Indexer AI</button>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+
+                if (data.network.length === 0) {
+                    netEl.innerHTML = '<div style="color:var(--text-dim); font-size:0.82rem">Aucun fichier réseau.</div>';
+                } else {
+                    netEl.innerHTML = data.network.map(f => `
+                        <div class="file-card" style="margin-bottom:0.8rem">
+                            <div class="file-name" title="${f.filename}">🌐 ${f.filename}</div>
+                            <div class="file-meta">${f.size_kb} KB <span class="tag tag-net">Réseau</span></div>
+                            <div class="file-actions">
+                                <button class="btn btn-cyan btn-sm" onclick="startDownload('${f.id}')">⬇ Télécharger</button>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {}
+        }
+
+        async function uploadAndShareFile(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const statusEl = document.getElementById('upload-status');
+            statusEl.innerHTML = `<div class="alert alert-info"><span class="spinner"></span> Upload de ${file.name}...</div>`;
+
+            const fd = new FormData();
+            fd.append('file', file);
+            try {
+                const res = await fetch(`${API}/upload`, { method: 'POST', body: fd });
+                const result = await res.json();
+                if (result.success) {
+                    statusEl.innerHTML = `<div class="alert alert-success">✓ ${file.name} partagé avec succès sur le réseau !</div>`;
+                    updateFiles();
+                } else {
+                    statusEl.innerHTML = `<div class="alert alert-error">✗ ${result.error}</div>`;
+                }
+            } catch (e) {
+                statusEl.innerHTML = `<div class="alert alert-error">✗ Erreur de communication.</div>`;
+            }
+            input.value = '';
+        }
+
+        async function indexFileForAI(fid, filename) {
+            try {
+                const res = await fetch(`${API}/ai/index_file/${fid}`, {method:'POST'});
+                const result = await res.json();
+                if (result.success) {
+                    aiIndexedFiles[fid] = filename;
+                    alert(`✓ "${filename}" indexé dans l'IA !`);
+                } else {
+                    alert('Erreur: ' + result.error);
+                }
+            } catch (e) { alert('Erreur de communication.'); }
+        }
+
+        async function startDownload(fid) {
+            try {
+                const res = await fetch(`${API}/download/${fid.substring(0,8)}`, {method:'POST'});
+                const result = await res.json();
+                if (result.success) alert('⬇ Téléchargement démarré !');
+                else alert('Erreur: ' + result.error);
+            } catch (e) { alert('Erreur de communication.'); }
+        }
+
+        // ===== WEB OF TRUST =====
+        async function updateWot() {
+            try {
+                const res = await fetch(`${API}/peers`);
+                const peers = await res.json();
+                const grid = document.getElementById('wot-grid');
+                if (peers.length === 0) {
+                    grid.innerHTML = '<div class="glass-card" style="color:var(--text-dim); font-size:0.85rem">Aucun pair découvert. Assurez-vous d\'être sur le même réseau local.</div>';
+                    return;
+                }
+                grid.innerHTML = peers.map(p => `
+                    <div class="glass-card" style="margin-bottom:0">
+                        <div class="card-label">Pair découvert</div>
+                        <div style="font-family:monospace; font-size:0.72rem; word-break:break-all; color:var(--accent-cyan); margin-bottom:0.8rem">${p.id}</div>
+                        <div style="margin-bottom:0.8rem">
+                            ${p.trusted
+                                ? '<span class="tag tag-green">✅ Approuvé (WoT)</span>'
+                                : '<span style="color:var(--text-dim); font-size:0.78rem">❓ Identité non vérifiée</span>'}
+                        </div>
+                        ${!p.trusted ? `<button class="btn btn-cyan btn-sm" onclick="trustPeer('${p.id}')">🔰 Approuver</button>` : ''}
+                    </div>
+                `).join('');
+            } catch (e) {}
+        }
+
+        async function trustPeer(pid) {
+            await fetch(`${API}/trust/${pid}`, {method:'POST'});
+            updateWot();
+        }
+
+        // ===== ARCHIPEL-AI PAGE =====
+        async function updateAIPage() {
+            const el = document.getElementById('ai-indexed-files');
+            const keys = Object.keys(aiIndexedFiles);
+            if (keys.length === 0) {
+                el.innerHTML = '<span style="color:var(--text-dim); font-size:0.82rem">Aucun fichier indexé. Allez dans "Fichiers" et cliquez "Indexer AI".</span>';
+            } else {
+                el.innerHTML = keys.map(k => `<span class="tag tag-green" style="margin:2px 4px; font-size:0.75rem">📄 ${aiIndexedFiles[k]}</span>`).join('');
+            }
+        }
+
+        async function askGlobalAI() {
+            const input = document.getElementById('ai-ask-input');
+            const query = input.value.trim();
+            if (!query) return;
+            const box = document.getElementById('ai-chat-box');
+            const time = new Date().toLocaleTimeString('fr', {hour:'2-digit', minute:'2-digit'});
+            box.innerHTML += `<div class="bubble bubble-out">${escapeHtml(query)}<div class="msg-time">${time}</div></div>`;
+            box.innerHTML += `<div class="bubble bubble-sys" id="ai-thinking"><span class="spinner"></span> Archipel-AI réfléchit...</div>`;
+            box.scrollTop = box.scrollHeight;
+            input.value = '';
+
+            try {
+                const res = await fetch(`${API}/ai/ask`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({peer_id: null, query})
+                });
+                const result = await res.json();
+                document.getElementById('ai-thinking')?.remove();
+                const rtime = new Date().toLocaleTimeString('fr', {hour:'2-digit', minute:'2-digit'});
+                if (result.success) {
+                    box.innerHTML += `<div class="bubble bubble-ai"><div class="bubble-ai-header">✨ ARCHIPEL-AI</div>${escapeHtml(result.response).replace(/\n/g,'<br>')}<div class="msg-time">${rtime}</div></div>`;
+                } else {
+                    box.innerHTML += `<div class="bubble bubble-sys" style="color:#f87171">⚠ ${escapeHtml(result.error)}</div>`;
+                }
+            } catch (e) {
+                document.getElementById('ai-thinking')?.remove();
+                box.innerHTML += `<div class="bubble bubble-sys" style="color:#f87171">⚠ Impossible de contacter l'IA.</div>`;
+            }
+            box.scrollTop = box.scrollHeight;
+        }
+
+        // ===== SETTINGS =====
+        async function saveApiKey() {
+            const key = document.getElementById('settings-api-key').value.trim();
+            const alertEl = document.getElementById('settings-alert');
+            if (!key) {
+                alertEl.innerHTML = '<div class="alert alert-error">Clé API vide.</div>';
+                return;
+            }
+            try {
+                const res = await fetch(`${API}/settings/api_key`, {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({api_key: key})
+                });
+                const result = await res.json();
+                if (result.success) {
+                    alertEl.innerHTML = '<div class="alert alert-success">✓ Clé sauvegardée ! Redémarrez le nœud pour l\'activer.</div>';
+                } else {
+                    alertEl.innerHTML = `<div class="alert alert-error">✗ ${result.error}</div>`;
+                }
+            } catch(e) {
+                alertEl.innerHTML = '<div class="alert alert-error">✗ Erreur de communication.</div>';
+            }
+        }
+
+        // ===== HELPERS =====
+        function escapeHtml(text) {
+            const d = document.createElement('div');
+            d.appendChild(document.createTextNode(text));
+            return d.innerHTML;
         }
 
         function startPolling() {
             if (pollTimer) clearInterval(pollTimer);
-            pollTimer = setInterval(() => {
-                updateStatus();
-                loadMessages();
-            }, 2000);
+            updateStatus();
+            pollTimer = setInterval(() => { updateStatus(); loadMessages(); }, 2500);
         }
 
         function stopPolling() {
@@ -556,7 +1272,7 @@
             pollTimer = null;
         }
 
-        // Initialisation
+        // Init
         updateStatus();
         startPolling();
     </script>

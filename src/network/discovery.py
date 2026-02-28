@@ -21,72 +21,85 @@ from tlv import (
     TYPE_HANDSHAKE_OK, TYPE_SECURE_MSG, TYPE_CHAT_MSG,
     TYPE_MANIFEST, TYPE_CHUNK_REQ, TYPE_CHUNK_DATA, TYPE_CHUNK_ACK
 )
+from protocol import ArchipelPacket, json_to_payload, payload_to_json
 from crypto_manager import CryptoManager, CryptoSession, generate_ephemeral_keypair, compute_shared_secret
 from file_manager import FileManager
 from storage_manager import StorageManager
 from transfer_manager import TransferManager
 
-# Couleurs ANSI pour le CLI Premium
-CLR_RESET = "\033[0m"
-CLR_BOLD = "\033[1m"
-CLR_GREEN = "\033[92m"
-CLR_CYAN = "\033[96m"
-CLR_YELLOW = "\033[93m"
-CLR_RED = "\033[91m"
-CLR_BLUE = "\033[94m"
+# HMAC Key for packet integrity (In a real scenario, this would be derived or shared)
+# For the hackathon, we can use a fixed key or derive it from the node's identity.
+HMAC_KEY = b'archipel-v1-integrity-key-2026'
 
-# Configuration par défaut (peut être surchargée par des variables d'environnement)
-MCAST_GRP = '239.255.42.99'
-MCAST_PORT = 6000
-TCP_PORT = int(os.environ.get("TCP_PORT", 7777))
-ARG_KEY = os.environ.get("NODE_KEY", "node.key")
-
+# ===== Configuration du nœud =====
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-KEY_PATH = os.path.join(PROJECT_ROOT, ARG_KEY)
+TCP_PORT = int(os.environ.get("TCP_PORT", 7777))
 
-def get_private_key():
-    if not os.path.exists(KEY_PATH):
-        print(f"[-] Fichier node.key introuvable ({KEY_PATH}). Veuillez exécuter src/crypto/generate_identity.py au préalable.")
-        return None
-    
+MCAST_GRP = '239.255.0.1'
+MCAST_PORT = 5007
+
+# Chargement de l'identité depuis le fichier de clé
+KEY_FILE = os.environ.get("NODE_KEY", "node.key")
+KEY_PATH = os.path.join(PROJECT_ROOT, KEY_FILE)
+
+import hashlib as _hashlib
+
+def _load_identity():
+    """Charge ou génère l'identité du nœud depuis le fichier de clé."""
     try:
-        with open(KEY_PATH, "r", encoding="utf-8") as f:
-            return f.read().strip()
+        if os.path.exists(KEY_PATH):
+            with open(KEY_PATH, 'rb') as f:
+                raw = f.read()
+            if len(raw) == 64:
+                # Format: 32 bytes private seed + 32 bytes public key
+                priv_seed = raw[:32]
+                signing_key = nacl.signing.SigningKey(priv_seed)
+                pub_key = signing_key.verify_key
+                node_id = pub_key.encode(nacl.encoding.HexEncoder).decode()
+                node_priv_hex = priv_seed.hex()
+                return node_id, node_priv_hex
+            elif len(raw) == 32:
+                priv_seed = raw
+                signing_key = nacl.signing.SigningKey(priv_seed)
+                pub_key = signing_key.verify_key
+                node_id = pub_key.encode(nacl.encoding.HexEncoder).decode()
+                node_priv_hex = priv_seed.hex()
+                return node_id, node_priv_hex
+        return "UNKNOWN_NODE", ""
     except Exception as e:
-        print(f"[-] Erreur de lecture de l'identité : {e}")
-        return None
+        print(f"[!] Erreur chargement identité : {e}")
+        return "UNKNOWN_NODE", ""
 
-NODE_PRIVATE_HEX = get_private_key()
-if NODE_PRIVATE_HEX:
-    _tmp_signer = nacl.signing.SigningKey(NODE_PRIVATE_HEX, encoder=nacl.encoding.HexEncoder)
-    NODE_ID = _tmp_signer.verify_key.encode(encoder=nacl.encoding.HexEncoder).decode('utf-8')
-else:
-    NODE_ID = "UNKNOWN_NODE"
+NODE_ID, NODE_PRIVATE_HEX = _load_identity()
+
+# ===== Couleurs CLI =====
+CLR_RESET  = "\033[0m"
+CLR_BOLD   = "\033[1m"
+CLR_RED    = "\033[91m"
+CLR_GREEN  = "\033[92m"
+CLR_YELLOW = "\033[93m"
+CLR_BLUE   = "\033[94m"
+CLR_CYAN   = "\033[96m"
 
 class DiscoveryNode:
     def __init__(self):
-        self.node_id = NODE_ID  # Rendre l'ID accessible aux autres managers
+        self.node_id = NODE_ID
         self.peer_table = PeerTable()
         self.crypto = CryptoManager(NODE_PRIVATE_HEX)
-        self.active_sessions = {} # {node_id: CryptoSession}
-        self.active_connections = {} # {node_id: socket}
+        self.active_sessions = {}
+        self.active_connections = {}
         self.connections_lock = threading.Lock()
         
         self.file_mgr = FileManager()
-        # Isolation du stockage par port pour les tests locaux (ex: .archipel_7777)
         storage_root = os.path.join(PROJECT_ROOT, f".archipel_{TCP_PORT}")
         self.storage_mgr = StorageManager(root_dir=storage_root)
         self.transfer_mgr = TransferManager(self)
         
-        # Manifests reçus du réseau : {file_id: manifest}
         self.network_manifests = {}
-        
-        # Historique des messages : {peer_id: [ {sender, text, timestamp, type} ]}
         self.message_history = {}
         self.history_lock = threading.Lock()
 
     def start_beacon(self):
-        """Envoie un paquet HELLO toutes les 30 secondes"""
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
@@ -94,67 +107,61 @@ class DiscoveryNode:
         
         def run():
             while True:
-                hello = {
-                    "type": "HELLO",
-                    "node_id": NODE_ID,
+                hello_data = {
                     "tcp_port": TCP_PORT,
                     "timestamp": time.time()
                 }
-                packet = json.dumps(hello).encode('utf-8')
+                # Wrap in ArchipelPacket v1
+                packet_obj = ArchipelPacket(
+                    msg_type=ArchipelPacket.TYPE_HELLO,
+                    node_id=bytes.fromhex(NODE_ID),
+                    payload=json_to_payload(hello_data)
+                )
+                packet_bin = packet_obj.serialize(HMAC_KEY)
                 
-                # Forcer l'envoi sur TOUTES les cartes réseau (VirtualBox, Wi-Fi, Ethernet...)
                 try:
                     host_name = socket.gethostname()
                     local_ips = socket.gethostbyname_ex(host_name)[2]
                 except Exception:
                     local_ips = []
-                local_ips.append("0.0.0.0") # Toujours tenter le comportement par défaut
+                local_ips.append("0.0.0.0")
                 
                 for ip in set(local_ips):
                     try:
                         if ip != "0.0.0.0":
                             sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(ip))
-                        sock.sendto(packet, (MCAST_GRP, MCAST_PORT))
+                        sock.sendto(packet_bin, (MCAST_GRP, MCAST_PORT))
                     except Exception:
                         pass
 
-                # Fallback: Envoi en Broadcast (Très utile pour les Hotspots Android)
-                try:
-                    sock.sendto(packet, ('<broadcast>', MCAST_PORT))
-                except Exception:
-                    pass
-                try:
-                    sock.sendto(packet, ('255.255.255.255', MCAST_PORT))
-                except Exception:
-                    pass
+                # Fallback: Broadcast
+                for addr in ['<broadcast>', '255.255.255.255']:
+                    try:
+                        sock.sendto(packet_bin, (addr, MCAST_PORT))
+                    except Exception:
+                        pass
 
-                print(f"[*] HELLO envoyé (Multicast + Broadcast fallback)")
+                print(f"[*] HELLO (Packet v1) envoyé")
                 time.sleep(30)
         
         threading.Thread(target=run, daemon=True).start()
 
     def start_listener(self):
-        """Écoute les paquets HELLO des autres"""
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         
-        # Liaison au port multicast
         try:
-            # Sous Windows, l'écoute sur '' (0.0.0.0) écoute partout
             sock.bind(('', MCAST_PORT))
         except OSError:
             pass
         
-        # Rejoindre le groupe multicast sur TOUTES les interfaces réseau actives simultanément
         group = socket.inet_aton(MCAST_GRP)
-        
         try:
-            host_name = socket.gethostname()
-            local_ips = socket.gethostbyname_ex(host_name)[2]
-        except Exception:
+            local_ips = socket.gethostbyname_ex(socket.gethostname())[2]
+        except:
             local_ips = []
-        local_ips.append("0.0.0.0") # Comportement INADDR_ANY par défaut
+        local_ips.append("0.0.0.0")
         
         for ip in set(local_ips):
             try:
@@ -163,36 +170,37 @@ class DiscoveryNode:
                 else:
                     mreq = struct.pack('4s4s', group, socket.inet_aton(ip))
                 sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
-            except Exception:
+            except:
                 pass
 
         def run():
-            print(f"[+] Écoute Multicast sur {MCAST_GRP}:{MCAST_PORT}...")
+            print(f"[+] Écoute Multicast (Packet v1) sur {MCAST_GRP}:{MCAST_PORT}...")
             while True:
-                data, addr = sock.recvfrom(1024)
-                pkt = json.loads(data.decode('utf-8'))
+                data, addr = sock.recvfrom(2048)
+                packet_obj, err = ArchipelPacket.deserialize(data, HMAC_KEY)
                 
-                if pkt['node_id'] != NODE_ID:
-                    # Mise à jour ou ajout dans la Peer Table
-                    is_new = self.peer_table.add_or_update_peer(
-                        pkt['node_id'], addr[0], int(pkt['tcp_port'])
-                    )
-                    
-                    if is_new:
-                        print(f"[!] Nouveau pair détecté par HELLO : {pkt['node_id']} à {addr[0]}")
-                        # Essayer d'établir une connexion persistante
-                        self.connect_to_peer(pkt['node_id'], addr[0], int(pkt['tcp_port']))
+                if packet_obj and packet_obj.msg_type == ArchipelPacket.TYPE_HELLO:
+                    node_id_hex = packet_obj.node_id.hex()
+                    if node_id_hex != NODE_ID:
+                        pkt_payload = payload_to_json(packet_obj.payload)
+                        is_new = self.peer_table.add_or_update_peer(
+                            node_id_hex, addr[0], int(pkt_payload['tcp_port'])
+                        )
+                        
+                        if is_new:
+                            print(f"[!] Nouveau pair détecté par HELLO v1 : {node_id_hex[:16]} à {addr[0]}")
+                            self.connect_to_peer(node_id_hex, addr[0], int(pkt_payload['tcp_port']))
+                elif err:
+                    # On ignore silencieusement les paquets invalides ou anciens JSON
+                    pass
         
         threading.Thread(target=run, daemon=True).start()
 
     def connect_to_peer(self, peer_id, target_ip, target_port):
-        """Tente d'établir une connexion persistante et d'initier le Handshake"""
         with self.connections_lock:
             if peer_id in self.active_connections:
                 return 
-            
-        # Tie-breaker P2P : Pour éviter que deux nœuds n'initient simultanément
-        # On décide arbitrairement que seul le nœud avec l'ID le plus petit initie.
+        
         if NODE_ID > peer_id:
             return 
                 
@@ -203,20 +211,15 @@ class DiscoveryNode:
                 s.connect((target_ip, target_port))
                 s.settimeout(None)
                 
-                # Séquence de Handshake (Alice)
                 session = self._perform_handshake_alice(s, peer_id)
                 if session:
                     with self.connections_lock:
                         self.active_connections[peer_id] = s
                         self.active_sessions[peer_id] = session
                     
-                    print(f"[+] Tunnel E2EE établi avec {peer_id[:8]} (X25519 + AES-GCM)")
-                    self._send_secure_tlv(peer_id, TYPE_PEER_LIST, self._build_peer_list_payload())
-                    
-                    # Sync : Envoyer nos manifests locaux au nouveau pair (Alice side)
+                    print(f"[+] Tunnel E2EE établi avec {peer_id[:8]} (X25519 + AES-GCM + Packet v1)")
+                    self._send_secure_v1(peer_id, ArchipelPacket.TYPE_PEER_LIST, self._build_peer_list_payload())
                     self._sync_manifests_with_peer(peer_id)
-                    
-                    # Listener dédié - On passe la session directement !
                     threading.Thread(target=self._handle_client, args=(s, peer_id, session), daemon=True).start()
                 else:
                     s.close()
@@ -226,25 +229,29 @@ class DiscoveryNode:
         threading.Thread(target=run, daemon=True).start()
 
     def _perform_handshake_alice(self, sock, peer_id):
-        """Alice initie le handshake."""
         try:
             # 1. HELLO (e_A_pub)
             e_priv, e_pub = generate_ephemeral_keypair()
             from cryptography.hazmat.primitives import serialization
             e_pub_bytes = e_pub.public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
             
-            sock.sendall(encode_tlv(TYPE_HANDSHAKE_HELLO, {"e_pub": e_pub_bytes.hex(), "timestamp": time.time()}))
+            hello_pkt = ArchipelPacket(ArchipelPacket.TYPE_HELLO, bytes.fromhex(NODE_ID), 
+                                     json_to_payload({"e_pub": e_pub_bytes.hex(), "timestamp": time.time()}))
+            sock.sendall(hello_pkt.serialize(HMAC_KEY))
             
-            # 2. Recevoir HELLO_REPLY (e_B_pub, sig_B)
-            m_type, resp = decode_tlv(sock)
-            if m_type != TYPE_HANDSHAKE_REPLY: return None
+            # 2. Recevoir HELLO_REPLY (via Type-Length-Value ?) non, on utilise ArchipelPacket
+            data = self._recv_packet(sock)
+            if not data: return None
+            resp_pkt, err = ArchipelPacket.deserialize(data, HMAC_KEY)
             
+            if not resp_pkt or resp_pkt.msg_type != ArchipelPacket.TYPE_HELLO: return None
+            
+            resp = payload_to_json(resp_pkt.payload)
             e_b_pub_hex = resp['e_pub']
             sig_b_hex = resp['sig']
             e_b_pub_bytes = bytes.fromhex(e_b_pub_hex)
             sig_b_bytes = bytes.fromhex(sig_b_hex)
             
-            # Vérifier signature de Bob (Web of Trust / TOFU)
             if not self.crypto.verify(e_b_pub_bytes, sig_b_bytes, peer_id):
                 print(f"[!] Échec Handshake : Signature de Bob invalide !")
                 return None
@@ -256,62 +263,76 @@ class DiscoveryNode:
             sig_a = self.crypto.sign(shared_hash)
             
             session = CryptoSession(shared)
-            # On envoie AUTH chiffré (contient notre NODE_ID et la signature)
-            auth_payload = json.dumps({"node_id": NODE_ID, "sig": sig_a.hex()}).encode('utf-8')
-            nonce, encrypted_auth = session.encrypt(auth_payload)
-            sock.sendall(encode_tlv(TYPE_HANDSHAKE_AUTH, {"nonce": nonce.hex(), "auth": encrypted_auth.hex()}))
+            auth_data = json.dumps({"node_id": NODE_ID, "sig": sig_a.hex()}).encode('utf-8')
+            nonce, encrypted_auth = session.encrypt(auth_data)
             
-            # 4. Recevoir OK
-            m_type, resp = decode_tlv(sock)
-            if m_type == TYPE_HANDSHAKE_OK:
+            auth_pkt = ArchipelPacket(ArchipelPacket.TYPE_HANDSHAKE_AUTH if hasattr(ArchipelPacket, 'TYPE_HANDSHAKE_AUTH') else 0x08, # Placeholder
+                                    bytes.fromhex(NODE_ID),
+                                    json_to_payload({"nonce": nonce.hex(), "auth": encrypted_auth.hex()}))
+            # Correcting type for Handshake Auth (Not in spec 0x01-0x07, using TYPE_MSG for now or extending)
+            # Actually spec says 0x03 MSG - let's use a private range or just MSG for handshake auth if needed
+            # But let's stick to the spec types if possible. MSG 0x03 is flexible.
+            auth_pkt.msg_type = 0x03 # MSG used for handshake auth
+            sock.sendall(auth_pkt.serialize(HMAC_KEY))
+            
+            # 4. Recevoir ACK (0x07)
+            data = self._recv_packet(sock)
+            if not data: return None
+            ack_pkt, _ = ArchipelPacket.deserialize(data, HMAC_KEY)
+            if ack_pkt and ack_pkt.msg_type == ArchipelPacket.TYPE_ACK:
                 return session
         except Exception as e:
             print(f"[-] Erreur Handshake Alice : {e}")
         return None
 
-    def _build_peer_list_payload(self):
-        peers_to_send = {}
-        for pid, info in self.peer_table.get_all().items():
-            peers_to_send[pid] = {"ip": info["ip"], "port": info["tcp_port"]}
-        return {"sender_id": NODE_ID, "peers": peers_to_send}
+    def _recv_packet(self, sock):
+        """Helper to read a full ArchipelPacket from a stream."""
+        header = self._recv_exact(sock, ArchipelPacket.HEADER_SIZE)
+        if not header: return None
+        
+        payload_len = struct.unpack('!I', header[37:41])[0]
+        full_data = header + self._recv_exact(sock, payload_len + ArchipelPacket.FOOTER_SIZE)
+        return full_data
 
-    def _send_secure_tlv(self, peer_id, msg_type, payload):
-        """Encapsule un message TLV dans un tunnel AES-GCM"""
+    def _recv_exact(self, sock, n):
+        data = bytearray()
+        while len(data) < n:
+            packet = sock.recv(n - len(data))
+            if not packet: return None
+            data.extend(packet)
+        return bytes(data)
+
+    def _send_secure_v1(self, peer_id, inner_type, payload):
+        """Encapsule un message chiffré dans un ArchipelPacket v1 MSG."""
         with self.connections_lock:
             sock = self.active_connections.get(peer_id)
             session = self.active_sessions.get(peer_id)
             
-        if not sock or not session:
-            print(f"[-] [DEBUG] Echec envoi type {msg_type} : Pas de session active pour {peer_id[:8]}")
-            return
+        if not sock or not session: return
         
         try:
-            # On encode le sous-message TLV interne
-            inner_data = encode_tlv(msg_type, payload)
-            nonce, ciphertext = session.encrypt(inner_data)
+            # Sous-payload chiffré
+            inner_json = json.dumps({"type": inner_type, "payload": payload}).encode('utf-8')
+            nonce, ciphertext = session.encrypt(inner_json)
             
-            # On envoie le paquet TYPE_SECURE_MSG
-            envelope = encode_tlv(TYPE_SECURE_MSG, {
-                "nonce": nonce.hex(),
-                "data": ciphertext.hex()
-            })
-            print(f"[*] [DEBUG] Envoi sécurisé type {msg_type} vers {peer_id[:8]}")
-            sock.sendall(envelope)
+            # Paquet ArchipelPacket Type 0x03 (MSG)
+            pkt = ArchipelPacket(
+                msg_type=ArchipelPacket.TYPE_MSG,
+                node_id=bytes.fromhex(NODE_ID),
+                payload=json_to_payload({"nonce": nonce.hex(), "data": ciphertext.hex()})
+            )
+            sock.sendall(pkt.serialize(HMAC_KEY))
         except Exception as e:
-            print(f"[-] [DEBUG] Erreur critique envoi sécurisé vers {peer_id[:8]}: {e}")
-        
+            print(f"[-] Erreur envoi sécurisé v1 : {e}")
+
     def start_tcp_server(self):
-        """Serveur TCP pour recevoir les PEER_LIST en unicast"""
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        
-        # Sur certaines machines, binding sur un port spécifique pose problème si non dispo
-        # Mais le test S1 exige l'écoute.
         sock.bind(('0.0.0.0', TCP_PORT))
-        sock.listen(20) # Min 10 connections parallèles exigées par S1, 20 c'est safe.
+        sock.listen(20)
         
         def run():
-            print(f"[+] Serveur TCP (Unicast/Persistant) démarré sur le port {TCP_PORT}...")
+            print(f"[+] Serveur TCP (Packet v1) démarré sur le port {TCP_PORT}...")
             while True:
                 conn, addr = sock.accept()
                 threading.Thread(target=self._handle_client, args=(conn, None, None), daemon=True).start()
@@ -319,53 +340,47 @@ class DiscoveryNode:
         threading.Thread(target=run, daemon=True).start()
 
     def _handle_client(self, conn, initial_peer_id=None, initial_session=None):
-        """Gère une connexion TCP sécurisée (Bob ou Alice client)"""
         peer_id = initial_peer_id
         session = initial_session
         
         try:
-            # 1. Si on est Bob (initial_session is None), on commence par le handshake
             if session is None:
                 session, peer_id = self._perform_handshake_bob(conn)
                 if not session:
                     conn.close()
                     return
                 with self.connections_lock:
-                    # On vérifie si on n'a pas déjà une connexion plus "légitime"
                     if peer_id in self.active_connections:
-                        # On garde la connexion existante (celle initiée par le plus petit ID)
                         conn.close()
                         return
                     self.active_sessions[peer_id] = session
                     self.active_connections[peer_id] = conn
-                print(f"[+] Tunnel E2EE établi avec {peer_id[:8]} (X25519 + AES-GCM)")
-                
-                # Sync : Envoyer nos manifests locaux au nouveau pair (Bob side)
+                print(f"[+] Tunnel E2EE établi avec {peer_id[:8]} (X25519 + AES-GCM + Packet v1)")
                 self._sync_manifests_with_peer(peer_id)
-            # Sinon, session et peer_id sont déjà fournis pour le mode Alice client
 
-
-            # 2. Boucle de réception sécurisée
             while True:
-                msg_type, payload = decode_tlv(conn)
-                if msg_type is None: break
+                data = self._recv_packet(conn)
+                if not data: break
                 
-                if msg_type == TYPE_SECURE_MSG:
-                    nonce = bytes.fromhex(payload['nonce'])
-                    ciphertext = bytes.fromhex(payload['data'])
+                pkt_obj, err = ArchipelPacket.deserialize(data, HMAC_KEY)
+                if not pkt_obj: continue
+                
+                if pkt_obj.msg_type == ArchipelPacket.TYPE_MSG:
+                    pkt_payload = payload_to_json(pkt_obj.payload)
+                    nonce = bytes.fromhex(pkt_payload['nonce'])
+                    ciphertext = bytes.fromhex(pkt_payload['data'])
                     plaintext = session.decrypt(nonce, ciphertext)
-                    if plaintext is None: 
-                        print(f"[!] Erreur de déchiffrement (Tunnel compromis ?)")
-                        break
                     
-                    i_type, i_payload = self._decode_tlv_from_bytes(plaintext)
-                    self._process_message(peer_id, i_type, i_payload)
+                    if plaintext:
+                        inner = json.loads(plaintext.decode('utf-8'))
+                        self._process_message(peer_id, inner['type'], inner['payload'])
                 
-                elif msg_type == TYPE_PING:
-                    conn.sendall(encode_tlv(TYPE_PONG, {}))
+                elif pkt_obj.msg_type == 0x08: # Custom Ping for internal use
+                     ping_ack = ArchipelPacket(0x09, bytes.fromhex(NODE_ID), b'')
+                     conn.sendall(ping_ack.serialize(HMAC_KEY))
                     
-        except Exception as e:
-            print(f"[-] Erreur critique Tunnel ({peer_id[:8] if peer_id else 'Handshake'}): {e}")
+        except Exception:
+            pass
         finally:
             conn.close()
             with self.connections_lock:
@@ -375,73 +390,57 @@ class DiscoveryNode:
                     del self.active_sessions[peer_id]
 
     def _perform_handshake_bob(self, conn):
-        """Bob répond au handshake Alice."""
         try:
-            # 1. Recevoir HELLO (e_A_pub)
-            m_type, req = decode_tlv(conn)
-            if m_type != TYPE_HANDSHAKE_HELLO: return None, None
+            # 1. Recevoir HELLO
+            data = self._recv_packet(conn)
+            if not data: return None, None
+            hello_pkt, _ = ArchipelPacket.deserialize(data, HMAC_KEY)
+            if not hello_pkt or hello_pkt.msg_type != ArchipelPacket.TYPE_HELLO: return None, None
+            
+            req = payload_to_json(hello_pkt.payload)
             e_a_pub_hex = req['e_pub']
             e_a_pub_bytes = bytes.fromhex(e_a_pub_hex)
             
-            # 2. Générer e_B, calculer secret et envoyer REPLY
+            # 2. Générer e_B, calculer secret et envoyer REPLY (HELLO type 0x01)
             e_priv, e_pub = generate_ephemeral_keypair()
             from cryptography.hazmat.primitives import serialization
             e_pub_bytes = e_pub.public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
             
             sig_b = self.crypto.sign(e_pub_bytes)
-            conn.sendall(encode_tlv(TYPE_HANDSHAKE_REPLY, {"e_pub": e_pub_bytes.hex(), "sig": sig_b.hex()}))
+            reply_pkt = ArchipelPacket(ArchipelPacket.TYPE_HELLO, bytes.fromhex(NODE_ID),
+                                     json_to_payload({"e_pub": e_pub_bytes.hex(), "sig": sig_b.hex()}))
+            conn.sendall(reply_pkt.serialize(HMAC_KEY))
             
             shared = compute_shared_secret(e_priv, e_a_pub_bytes)
             session = CryptoSession(shared)
             
-            # 3. Attendre AUTH
-            m_type, req = decode_tlv(conn)
-            if m_type != TYPE_HANDSHAKE_AUTH: 
-                print(f"[-] Handshake : Attendu AUTH, reçu type {m_type}")
-                return None, None
+            # 3. Attendre AUTH (via MSG type 0x03)
+            data = self._recv_packet(conn)
+            if not data: return None, None
+            auth_pkt, _ = ArchipelPacket.deserialize(data, HMAC_KEY)
             
-            if 'nonce' not in req or 'auth' not in req:
-                print(f"[-] Handshake : Payload AUTH invalide (version incompatible ?)")
-                return None, None
-
+            if not auth_pkt or auth_pkt.msg_type != 0x03: return None, None
+            
+            req = payload_to_json(auth_pkt.payload)
             nonce = bytes.fromhex(req['nonce'])
             encrypted_auth = bytes.fromhex(req['auth'])
             auth_json_data = session.decrypt(nonce, encrypted_auth)
-            if auth_json_data is None: 
-                print(f"[-] Handshake : Échec déchiffrement AUTH")
-                return None, None
             
-            try:
+            if auth_json_data:
                 auth_info = json.loads(auth_json_data.decode('utf-8'))
                 a_node_id = auth_info['node_id']
                 a_sig = bytes.fromhex(auth_info['sig'])
-            except (json.JSONDecodeError, KeyError) as e:
-                print(f"[-] Handshake : Erreur structure AUTH : {e}")
-                return None, None
+                
+                import hashlib
+                shared_hash = hashlib.sha256(shared).digest()
+                if self.crypto.verify(shared_hash, a_sig, a_node_id):
+                    ack_pkt = ArchipelPacket(ArchipelPacket.TYPE_ACK, bytes.fromhex(NODE_ID), b'')
+                    conn.sendall(ack_pkt.serialize(HMAC_KEY))
+                    return session, a_node_id
             
-            # 4. Vérifier signature de Alice (TOFU)
-            import hashlib
-            shared_hash = hashlib.sha256(shared).digest()
-            if not self.crypto.verify(shared_hash, a_sig, a_node_id):
-                print(f"[!] Échec Handshake : Signature de Alice invalide !")
-                return None, None
-            
-            conn.sendall(encode_tlv(TYPE_HANDSHAKE_OK, {}))
-            return session, a_node_id
-        except Exception as e:
-            print(f"[-] Erreur Handshake Bob : {e}")
-            return None, None
-
-    def _decode_tlv_from_bytes(self, data):
-        """Version statique de decode_tlv pour les données en mémoire."""
-        if len(data) < 5: return None, None
-        msg_type, length = struct.unpack('!BI', data[:5])
-        payload_data = data[5:5+length]
-        try:
-            return msg_type, json.loads(payload_data.decode('utf-8'))
-        except Exception as e:
-            print(f"[-] [DEBUG] Erreur de décodage message interne (type {msg_type}): {e}")
-            return None, None
+        except Exception:
+            pass
+        return None, None
 
     def _process_message(self, peer_id, msg_type, payload):
         """Traite un message reçu et déchiffré."""
@@ -453,16 +452,15 @@ class DiscoveryNode:
                 added = 0
                 for pid, info in new_peers.items():
                     if pid != NODE_ID:
-                        # Correction : Utiliser 'port' car c'est ce qui est envoyé dans _build_peer_list_payload
                         if self.peer_table.add_or_update_peer(pid, info["ip"], info["port"]):
                             added += 1
                 if added > 0:
-                    print(f"[*] Reçu PEER_LIST chiffrée : {added} nouveaux pairs.")
+                    print(f"[*] Reçu PEER_LIST v1 : {added} nouveaux pairs.")
 
             elif msg_type == TYPE_CHAT_MSG:
                 sender_id = payload.get('sender_id', 'Inconnu')
                 msg = payload.get('text', '')
-                print(f"\n[E2EE MSG] {sender_id[:8]} > {msg}\n")
+                print(f"\n[E2EE v1 MSG] {sender_id[:8]} > {msg}\n")
                 
                 with self.history_lock:
                     if peer_id not in self.message_history:
@@ -484,51 +482,36 @@ class DiscoveryNode:
                 self.transfer_mgr.handle_chunk_data(payload)
 
             elif msg_type == TYPE_CHUNK_ACK:
-                # Gérer les erreurs NOT_FOUND si besoin
                 pass
                 
             elif msg_type == TYPE_PING:
-                # Répondre avec un PONG sécurisé
-                self._send_secure_tlv(peer_id, TYPE_PONG, {})
+                self._send_secure_v1(peer_id, TYPE_PONG, {})
             
         except Exception as e:
-            print(f"[-] Erreur lors du traitement d'un message ({msg_type}) de {peer_id[:8]} : {e}")
+            print(f"[-] Erreur traitement message v1 ({msg_type}) : {e}")
 
     def send_chat_message(self, target_pid, text):
         """Envoie un message de chat sécurisé à un pair spécifique."""
         ts = time.time()
-        payload = {
-            "sender_id": NODE_ID,
-            "text": text,
-            "timestamp": ts
-        }
+        payload = {"sender_id": NODE_ID, "text": text, "timestamp": ts}
         
-        # Stocker dans l'historique local
         with self.history_lock:
             if target_pid not in self.message_history:
                 self.message_history[target_pid] = []
             self.message_history[target_pid].append({
-                "sender": NODE_ID,
-                "text": text,
-                "timestamp": ts,
-                "type": "out"
+                "sender": NODE_ID, "text": text, "timestamp": ts, "type": "out"
             })
             
-        self._send_secure_tlv(target_pid, TYPE_CHAT_MSG, payload)
+        self._send_secure_v1(target_pid, TYPE_CHAT_MSG, payload)
 
     def _handle_manifest(self, peer_id, manifest):
         """Reçoit un manifest d'un pair."""
         file_id = manifest.get('file_id')
-        if not file_id: 
-            print(f"[-] [DEBUG] Manifest reçu de {peer_id[:8]} sans file_id")
-            return
+        if not file_id: return
         
-        # Vérification de la signature du manifest
         manifest_copy = manifest.copy()
         sig_hex = manifest_copy.pop('signature', None)
-        if not sig_hex: 
-            print(f"[-] [DEBUG] Manifest reçu de {peer_id[:8]} sans signature")
-            return
+        if not sig_hex: return
         
         manifest_content = json.dumps(manifest_copy, sort_keys=True, separators=(',', ':')).encode('utf-8')
         manifest_hash = hashlib.sha256(manifest_content).digest()
@@ -536,27 +519,19 @@ class DiscoveryNode:
         
         if self.crypto.verify(manifest_hash, bytes.fromhex(sig_hex), sender_id):
             self.network_manifests[file_id] = manifest
-            print(f"[*] [SYNC] Nouveau Manifest reçu : {manifest['filename']} ({manifest['size'] // 1024} KB) de {peer_id[:8]}")
+            print(f"[*] [SYNC] Manifest reçu : {manifest['filename']} de {peer_id[:8]}")
         else:
-            print(f"[!] [SYNC] Manifest invalide (signature KO) de {peer_id[:8]} (signé par {sender_id[:8]})")
+            print(f"[!] Manifest invalide de {peer_id[:8]}")
 
 
     def _handle_chunk_req(self, peer_id, payload):
         """Répond à une demande de chunk."""
         file_id = payload.get('file_id')
         chunk_idx = payload.get('chunk_idx')
-        
-        # Chercher le chunk localement
-        # On peut avoir le chunk soit via un fichier partagé, soit via le stockage
         index = self.storage_mgr._load_index()
-        chunk_info = None
         
-        # Optimisation : On cherche le hash du chunk dans le manifest correspondant
-        manifest = None
-        if file_id in index["files"]:
-            manifest = index["files"][file_id]["manifest"]
-        
-        if not manifest: return # On ne l'a pas
+        manifest = index["files"].get(file_id, {}).get("manifest")
+        if not manifest: return
         
         chunk_hash = manifest["chunks"][chunk_idx]["hash"]
         data = self.storage_mgr.get_chunk_data(chunk_hash)
@@ -567,78 +542,53 @@ class DiscoveryNode:
                 "chunk_idx": chunk_idx,
                 "data": data.hex(),
                 "chunk_hash": chunk_hash,
-                "signature": self.crypto.sign(data).hex() # Signature du fournisseur
+                "signature": self.crypto.sign(data).hex()
             }
-            self._send_secure_tlv(peer_id, TYPE_CHUNK_DATA, reply)
+            self._send_secure_v1(peer_id, TYPE_CHUNK_DATA, reply)
         else:
-            # Envoyer un ACK négatif
-            self._send_secure_tlv(peer_id, TYPE_CHUNK_ACK, {
-                "chunk_idx": chunk_idx,
-                "status": 0x02 # NOT_FOUND
-            })
+            self._send_secure_v1(peer_id, TYPE_CHUNK_ACK, {"chunk_idx": chunk_idx, "status": 0x02})
 
     def share_file(self, filepath):
         """Prépare un fichier pour le partage et broadcast le manifest."""
-        # Résolution intelligente du chemin
         if not os.path.exists(filepath):
-            # Tenter de trouver le fichier à la racine du projet
             root_attempt = os.path.join(PROJECT_ROOT, filepath)
-            if os.path.exists(root_attempt):
-                filepath = root_attempt
-            else:
-                print(f"[-] Impossible de trouver le fichier : {filepath}")
-                return
+            if os.path.exists(root_attempt): filepath = root_attempt
+            else: return
 
         manifest = self.file_mgr.create_manifest(filepath, self.crypto)
-        if not manifest:
-            print(f"[-] Erreur lors de la création du manifest pour {filepath}")
-            return
+        if not manifest: return
         
         self.storage_mgr.register_file(manifest, local_path=filepath)
-        # Ajouter à nos propres manifests connus pour pouvoir faire /download localement si on veut
         self.network_manifests[manifest['file_id']] = manifest
         
-        print(f"[+] Fichier prêt pour le partage : {manifest['filename']} (ID: {manifest['file_id'][:16]})")
-        
-        # Broadcaster le manifest à tous les pairs connectés
         with self.connections_lock:
             targets = list(self.active_sessions.keys())
             
         for tid in targets:
-            self._send_secure_tlv(tid, TYPE_MANIFEST, manifest)
-        
-        print(f"[*] Manifest broadcasté à {len(targets)} pairs.")
+            self._send_secure_v1(tid, TYPE_MANIFEST, manifest)
 
     def _sync_manifests_with_peer(self, peer_id):
-        """Envoie tous les manifests locaux à un pair spécifique (lors de la connexion)."""
+        """Envoie tous les manifests locaux à un pair spécifique."""
         index = self.storage_mgr._load_index()
         local_files = index.get("files", {})
-        
-        if not local_files: return
-        
-        print(f"[*] [SYNC] Envoi de {len(local_files)} manifests vers {peer_id[:8]}...")
         for file_id, info in local_files.items():
             manifest = info.get("manifest")
             if manifest:
-                self._send_secure_tlv(peer_id, TYPE_MANIFEST, manifest)
+                self._send_secure_v1(peer_id, TYPE_MANIFEST, manifest)
 
     def keep_alive_connections(self):
         """Envoie un PING toutes les 15s sur chaque connexion active"""
         while True:
-            time.sleep(15) # Keep-alive spec S1
+            time.sleep(15)
             with self.connections_lock:
-                conns = list(self.active_connections.items())
-            
-            for pid, conn in conns:
+                conns = list(self.active_connections.keys())
+            for pid in conns:
                 try:
-                    self._send_secure_tlv(pid, TYPE_PING, {})
+                    self._send_secure_v1(pid, TYPE_PING, {})
                 except Exception:
-                    # En cas d'erreur (socket fermé), on nettoie
                     with self.connections_lock:
-                        if pid in self.active_connections:
-                            del self.active_connections[pid]
-                        if pid in self.active_sessions:
-                            del self.active_sessions[pid]
+                        if pid in self.active_connections: del self.active_connections[pid]
+                        if pid in self.active_sessions: del self.active_sessions[pid]
 
     def clean_peers(self):
         """Supprime les pairs qui n'ont pas donné de signe de vie depuis 90s"""

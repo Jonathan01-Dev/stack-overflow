@@ -65,6 +65,24 @@ venv.bak/
 node.key
 private.key
 
+# Gros fichiers binaires et exécutables
+*.exe
+*.bin
+*.dmg
+*.iso
+*.msi
+
+# Dossiers de stockage Archipel (générés à l'exécution)
+.archipel_*/
+
+# Fichiers de test lourds
+test_*.bin
+test_*.mp4
+generate_dummy_file.py
+
+# Peers cache (local à chaque nœud)
+peers.json
+
 # IDEs
 .idea/
 .vscode/
