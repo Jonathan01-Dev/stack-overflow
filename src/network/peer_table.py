@@ -86,6 +86,9 @@ class PeerTable:
         """Chargement de la table depuis le disque"""
         if os.path.exists(PEERS_FILE):
             try:
+                if os.path.getsize(PEERS_FILE) == 0:
+                    self.peers = {}
+                    return
                 with open(PEERS_FILE, "r", encoding="utf-8") as f:
                     self.peers = json.load(f)
                 print(f"[+] Table des pairs chargée depuis le disque ({len(self.peers)} pairs)")

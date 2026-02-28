@@ -184,6 +184,11 @@ class DiscoveryNode:
         with self.connections_lock:
             if peer_id in self.active_connections:
                 return 
+            
+        # Tie-breaker P2P : Pour éviter que deux nœuds n'initient simultanément
+        # On décide arbitrairement que seul le nœud avec l'ID le plus petit initie.
+        if NODE_ID > peer_id:
+            return 
                 
         def run():
             try:
@@ -202,11 +207,11 @@ class DiscoveryNode:
                     print(f"[+] Tunnel E2EE établi avec {peer_id[:8]} (X25519 + AES-GCM)")
                     self._send_secure_tlv(peer_id, TYPE_PEER_LIST, self._build_peer_list_payload())
                     
-                    # Sync : Envoyer nos manifests locaux au nouveau pair
+                    # Sync : Envoyer nos manifests locaux au nouveau pair (Alice side)
                     self._sync_manifests_with_peer(peer_id)
                     
-                    # Listener dédié
-                    threading.Thread(target=self._handle_client, args=(s, peer_id), daemon=True).start()
+                    # Listener dédié - On passe la session directement !
+                    threading.Thread(target=self._handle_client, args=(s, peer_id, session), daemon=True).start()
                 else:
                     s.close()
             except Exception:
@@ -278,10 +283,12 @@ class DiscoveryNode:
             nonce, ciphertext = session.encrypt(inner_data)
             
             # On envoie le paquet TYPE_SECURE_MSG
-            sock.sendall(encode_tlv(TYPE_SECURE_MSG, {
+            envelope = encode_tlv(TYPE_SECURE_MSG, {
                 "nonce": nonce.hex(),
                 "data": ciphertext.hex()
-            }))
+            })
+            print(f"[*] [DEBUG] Envoi sécurisé type {msg_type} vers {peer_id[:8]}")
+            sock.sendall(envelope)
         except Exception:
             pass
         
@@ -299,32 +306,36 @@ class DiscoveryNode:
             print(f"[+] Serveur TCP (Unicast/Persistant) démarré sur le port {TCP_PORT}...")
             while True:
                 conn, addr = sock.accept()
-                threading.Thread(target=self._handle_client, args=(conn, None), daemon=True).start()
+                threading.Thread(target=self._handle_client, args=(conn, None, None), daemon=True).start()
                         
         threading.Thread(target=run, daemon=True).start()
 
-    def _handle_client(self, conn, initial_peer_id=None):
-        """Gère une connexion TCP sécurisée (Bob)"""
+    def _handle_client(self, conn, initial_peer_id=None, initial_session=None):
+        """Gère une connexion TCP sécurisée (Bob ou Alice client)"""
         peer_id = initial_peer_id
-        session = None
+        session = initial_session
         
         try:
-            # 1. Si on est Bob (initial_peer_id is None), on commence par le handshake
-            if peer_id is None:
+            # 1. Si on est Bob (initial_session is None), on commence par le handshake
+            if session is None:
                 session, peer_id = self._perform_handshake_bob(conn)
                 if not session:
                     conn.close()
                     return
                 with self.connections_lock:
+                    # On vérifie si on n'a pas déjà une connexion plus "légitime"
+                    if peer_id in self.active_connections:
+                        # On garde la connexion existante (celle initiée par le plus petit ID)
+                        conn.close()
+                        return
                     self.active_sessions[peer_id] = session
                     self.active_connections[peer_id] = conn
                 print(f"[+] Tunnel E2EE établi avec {peer_id[:8]} (X25519 + AES-GCM)")
                 
-                # Sync : Envoyer nos manifests locaux au nouveau pair
+                # Sync : Envoyer nos manifests locaux au nouveau pair (Bob side)
                 self._sync_manifests_with_peer(peer_id)
-            else:
-                with self.connections_lock:
-                    session = self.active_sessions.get(peer_id)
+            # Sinon, session et peer_id sont déjà fournis pour le mode Alice client
+
 
             # 2. Boucle de réception sécurisée
             while True:
@@ -425,7 +436,7 @@ class DiscoveryNode:
 
     def _process_message(self, peer_id, msg_type, payload):
         """Traite un message reçu et déchiffré."""
-        # print(f"DEBUG: Réception message sécurisé TYPE={msg_type} de {peer_id[:8]}")
+        print(f"[*] [DEBUG] Réception message type {msg_type} de {peer_id[:8]}")
         
         if msg_type == TYPE_PEER_LIST:
             new_peers = payload.get('peers', {})
