@@ -56,6 +56,13 @@ class PeerTable:
                 self.peers[node_id]["reputation"] = max(0.0, self.peers[node_id]["reputation"] - 0.2)
             self.save()
 
+    def trust_peer(self, node_id):
+        """Marque explicitement un pair comme de confiance dans le Web of Trust."""
+        if node_id in self.peers:
+            self.peers[node_id]["trusted"] = True
+            self.save()
+            print(f"[WOT] Pair approuvé manuellement : {node_id}")
+
     def update_shared_files(self, node_id, files_list):
         if node_id in self.peers:
             self.peers[node_id]["shared_files"] = files_list

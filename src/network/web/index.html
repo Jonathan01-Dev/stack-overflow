@@ -749,7 +749,8 @@
                 <div class="section-header" style="margin-bottom:1rem">
                     <h1 class="section-title">💬 Messenger</h1>
                     <p class="section-subtitle">E2EE · Utilisez <code style="color:var(--accent-cyan)">/ask</code> ou
-                        <code style="color:var(--accent-cyan)">@archipel-ai</code> pour l'IA</p>
+                        <code style="color:var(--accent-cyan)">@archipel-ai</code> pour l'IA
+                    </p>
                 </div>
                 <div class="messenger-layout">
                     <aside class="messenger-aside">
@@ -907,7 +908,8 @@
                 <div class="glass-card">
                     <div class="card-label" style="margin-bottom:0.8rem">🔑 Générer une nouvelle identité</div>
                     <p style="font-size:0.82rem; color:var(--text-dim); margin-bottom:0.8rem">Crée un nouveau fichier
-                        <code>node.key</code> avec une clé Ed25519 unique.</p>
+                        <code>node.key</code> avec une clé Ed25519 unique.
+                    </p>
                     <code style="font-size:0.82rem; color:var(--accent-cyan)">python archipel.py gen-key</code>
                 </div>
             </div>
@@ -1005,13 +1007,13 @@
                     box.innerHTML = messages.map(m => {
                         let cls = m.type === 'out' ? 'bubble-out' : 'bubble-in';
                         if (m.sender === 'AI') cls = 'bubble-ai';
-                        const time = m.timestamp ? new Date(m.timestamp * 1000).toLocaleTimeString('fr', {hour:'2-digit', minute:'2-digit'}) : '';
+                        const time = m.timestamp ? new Date(m.timestamp * 1000).toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' }) : '';
                         const aiHeader = cls === 'bubble-ai' ? `<div class="bubble-ai-header">✨ ARCHIPEL-AI</div>` : '';
-                        return `<div class="bubble ${cls}">${aiHeader}${escapeHtml(m.text).replace(/\n/g,'<br>')}<div class="msg-time">${time}</div></div>`;
+                        return `<div class="bubble ${cls}">${aiHeader}${escapeHtml(m.text).replace(/\n/g, '<br>')}<div class="msg-time">${time}</div></div>`;
                     }).join('');
                     box.scrollTop = box.scrollHeight;
                 }
-            } catch (e) {}
+            } catch (e) { }
         }
 
         function detectAIMode(val) {
@@ -1029,7 +1031,7 @@
             if (isAI) {
                 const query = txt.replace('/ask', '').replace(/@archipel-ai/g, '').trim();
                 const box = document.getElementById('chat-messages');
-                const time = new Date().toLocaleTimeString('fr', {hour:'2-digit', minute:'2-digit'});
+                const time = new Date().toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' });
                 box.innerHTML += `<div class="bubble bubble-out">${escapeHtml(txt)}<div class="msg-time">${time}</div></div>`;
                 box.innerHTML += `<div class="bubble bubble-sys"><span class="spinner"></span> Archipel-AI réfléchit...</div>`;
                 box.scrollTop = box.scrollHeight;
@@ -1039,8 +1041,8 @@
                 try {
                     const res = await fetch(`${API}/ai/ask`, {
                         method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({peer_id: currentPeer, query})
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ peer_id: currentPeer, query })
                     });
                     const result = await res.json();
                     // Remove spinner
@@ -1048,8 +1050,8 @@
                     spinners[spinners.length - 1]?.remove();
 
                     if (result.success) {
-                        const rtime = new Date().toLocaleTimeString('fr', {hour:'2-digit', minute:'2-digit'});
-                        box.innerHTML += `<div class="bubble bubble-ai"><div class="bubble-ai-header">✨ ARCHIPEL-AI</div>${escapeHtml(result.response).replace(/\n/g,'<br>')}<div class="msg-time">${rtime}</div></div>`;
+                        const rtime = new Date().toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' });
+                        box.innerHTML += `<div class="bubble bubble-ai"><div class="bubble-ai-header">✨ ARCHIPEL-AI</div>${escapeHtml(result.response).replace(/\n/g, '<br>')}<div class="msg-time">${rtime}</div></div>`;
                     } else {
                         box.innerHTML += `<div class="bubble bubble-sys" style="color:#f87171">⚠ ${escapeHtml(result.error)}</div>`;
                     }
@@ -1066,8 +1068,8 @@
             try {
                 await fetch(`${API}/msg`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({target: currentPeer, text: txt})
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target: currentPeer, text: txt })
                 });
                 loadMessages();
             } catch (e) { alert("Erreur d'envoi"); }
@@ -1108,7 +1110,7 @@
                         </div>
                     `).join('');
                 }
-            } catch (e) {}
+            } catch (e) { }
         }
 
         async function uploadAndShareFile(input) {
@@ -1136,7 +1138,7 @@
 
         async function indexFileForAI(fid, filename) {
             try {
-                const res = await fetch(`${API}/ai/index_file/${fid}`, {method:'POST'});
+                const res = await fetch(`${API}/ai/index_file/${fid}`, { method: 'POST' });
                 const result = await res.json();
                 if (result.success) {
                     aiIndexedFiles[fid] = filename;
@@ -1149,11 +1151,12 @@
 
         async function startDownload(fid) {
             try {
-                const res = await fetch(`${API}/download/${fid.substring(0,8)}`, {method:'POST'});
+                const res = await fetch(`${API}/download/${fid}`, { method: 'POST' });
                 const result = await res.json();
-                if (result.success) alert('⬇ Téléchargement démarré !');
-                else alert('Erreur: ' + result.error);
-            } catch (e) { alert('Erreur de communication.'); }
+                if (result.success) {
+                    alert('Téléchargement démarré. Vérifiez le Dashboard.');
+                } else alert('Erreur: ' + result.error);
+            } catch (e) { alert('Erreur réseau'); }
         }
 
         // ===== WEB OF TRUST =====
@@ -1162,28 +1165,47 @@
                 const res = await fetch(`${API}/peers`);
                 const peers = await res.json();
                 const grid = document.getElementById('wot-grid');
+
                 if (peers.length === 0) {
-                    grid.innerHTML = '<div class="glass-card" style="color:var(--text-dim); font-size:0.85rem">Aucun pair découvert. Assurez-vous d\'être sur le même réseau local.</div>';
+                    grid.innerHTML = '<div style="color:var(--text-dim); font-size:0.85rem">Aucun pair découvert sur le réseau pour le moment.</div>';
                     return;
                 }
+
                 grid.innerHTML = peers.map(p => `
-                    <div class="glass-card" style="margin-bottom:0">
-                        <div class="card-label">Pair découvert</div>
-                        <div style="font-family:monospace; font-size:0.72rem; word-break:break-all; color:var(--accent-cyan); margin-bottom:0.8rem">${p.id}</div>
-                        <div style="margin-bottom:0.8rem">
-                            ${p.trusted
-                                ? '<span class="tag tag-green">✅ Approuvé (WoT)</span>'
-                                : '<span style="color:var(--text-dim); font-size:0.78rem">❓ Identité non vérifiée</span>'}
+                    <div class="glass-card" style="margin-bottom:0; display:flex; flex-direction:column; justify-content:space-between">
+                        <div>
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.8rem">
+                                <div class="avatar" style="width:36px; height:36px; font-size:0.7rem">${p.id.substring(0, 2).toUpperCase()}</div>
+                                ${p.trusted ? '<span class="tag tag-green">✓ Approuvé</span>' : '<span class="tag tag-cyan" style="background:rgba(255,255,255,0.05); color:var(--text-dim); border:1px solid var(--glass-border)">Non Vérifié</span>'}
+                            </div>
+                            <div class="card-label" style="margin-bottom:0.2rem">ID du pair (Short)</div>
+                            <div style="font-family:monospace; font-size:0.9rem; font-weight:700; color:var(--text)">${p.short_id}</div>
+                            <div style="font-family:monospace; font-size:0.65rem; color:var(--text-dim); margin-top:0.3rem; word-break:break-all">${p.id}</div>
                         </div>
-                        ${!p.trusted ? `<button class="btn btn-cyan btn-sm" onclick="trustPeer('${p.id}')">🔰 Approuver</button>` : ''}
+                        <div style="margin-top:1.2rem">
+                            ${!p.trusted ? `<button class="btn btn-cyan btn-sm" style="width:100%" onclick="trustPeer('${p.id}')">🛡️ Faire confiance</button>` : `<button class="btn btn-ghost btn-sm" style="width:100%" disabled>Déjà approuvé</button>`}
+                        </div>
                     </div>
                 `).join('');
-            } catch (e) {}
+            } catch (e) {
+                document.getElementById('wot-grid').innerHTML = '<div style="color:red">Erreur lors du chargement des pairs.</div>';
+            }
         }
 
         async function trustPeer(pid) {
-            await fetch(`${API}/trust/${pid}`, {method:'POST'});
-            updateWot();
+            if (!confirm("Êtes-vous sûr de vouloir accorder votre confiance à ce pair ? Ses messages seront désormais marqués comme sûrs.")) return;
+            try {
+                const res = await fetch(`${API}/trust/${pid}`, { method: 'POST' });
+                const result = await res.json();
+                if (result.success) {
+                    alert("✅ Pair ajouté au Web of Trust !");
+                    updateWot(); // Rafraîchir la vue
+                } else {
+                    alert("Erreur: " + result.error);
+                }
+            } catch (e) {
+                alert("Erreur de connexion avec le nœud local.");
+            }
         }
 
         // ===== ARCHIPEL-AI PAGE =====
@@ -1202,7 +1224,7 @@
             const query = input.value.trim();
             if (!query) return;
             const box = document.getElementById('ai-chat-box');
-            const time = new Date().toLocaleTimeString('fr', {hour:'2-digit', minute:'2-digit'});
+            const time = new Date().toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' });
             box.innerHTML += `<div class="bubble bubble-out">${escapeHtml(query)}<div class="msg-time">${time}</div></div>`;
             box.innerHTML += `<div class="bubble bubble-sys" id="ai-thinking"><span class="spinner"></span> Archipel-AI réfléchit...</div>`;
             box.scrollTop = box.scrollHeight;
@@ -1211,14 +1233,14 @@
             try {
                 const res = await fetch(`${API}/ai/ask`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({peer_id: null, query})
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ peer_id: null, query })
                 });
                 const result = await res.json();
                 document.getElementById('ai-thinking')?.remove();
-                const rtime = new Date().toLocaleTimeString('fr', {hour:'2-digit', minute:'2-digit'});
+                const rtime = new Date().toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' });
                 if (result.success) {
-                    box.innerHTML += `<div class="bubble bubble-ai"><div class="bubble-ai-header">✨ ARCHIPEL-AI</div>${escapeHtml(result.response).replace(/\n/g,'<br>')}<div class="msg-time">${rtime}</div></div>`;
+                    box.innerHTML += `<div class="bubble bubble-ai"><div class="bubble-ai-header">✨ ARCHIPEL-AI</div>${escapeHtml(result.response).replace(/\n/g, '<br>')}<div class="msg-time">${rtime}</div></div>`;
                 } else {
                     box.innerHTML += `<div class="bubble bubble-sys" style="color:#f87171">⚠ ${escapeHtml(result.error)}</div>`;
                 }
@@ -1240,8 +1262,8 @@
             try {
                 const res = await fetch(`${API}/settings/api_key`, {
                     method: 'POST',
-                    headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({api_key: key})
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ api_key: key })
                 });
                 const result = await res.json();
                 if (result.success) {
@@ -1249,7 +1271,7 @@
                 } else {
                     alertEl.innerHTML = `<div class="alert alert-error">✗ ${result.error}</div>`;
                 }
-            } catch(e) {
+            } catch (e) {
                 alertEl.innerHTML = '<div class="alert alert-error">✗ Erreur de communication.</div>';
             }
         }
