@@ -17,9 +17,13 @@ from peer_table import PeerTable
 from tlv import (
     encode_tlv, decode_tlv, TYPE_PEER_LIST, TYPE_PING, TYPE_PONG,
     TYPE_HANDSHAKE_HELLO, TYPE_HANDSHAKE_REPLY, TYPE_HANDSHAKE_AUTH,
-    TYPE_HANDSHAKE_OK, TYPE_SECURE_MSG, TYPE_CHAT_MSG
+    TYPE_HANDSHAKE_OK, TYPE_SECURE_MSG, TYPE_CHAT_MSG,
+    TYPE_MANIFEST, TYPE_CHUNK_REQ, TYPE_CHUNK_DATA, TYPE_CHUNK_ACK
 )
 from crypto_manager import CryptoManager, CryptoSession, generate_ephemeral_keypair, compute_shared_secret
+from file_manager import FileManager
+from storage_manager import StorageManager
+from transfer_manager import TransferManager
 
 MCAST_GRP = '239.255.42.99'
 MCAST_PORT = 6000
@@ -63,6 +67,13 @@ class DiscoveryNode:
         self.active_sessions = {} # {node_id: CryptoSession}
         self.active_connections = {} # {node_id: socket}
         self.connections_lock = threading.Lock()
+        
+        self.file_mgr = FileManager()
+        self.storage_mgr = StorageManager()
+        self.transfer_mgr = TransferManager(self)
+        
+        # Manifests reçus du réseau : {file_id: manifest}
+        self.network_manifests = {}
 
     def start_beacon(self):
         """Envoie un paquet HELLO toutes les 30 secondes"""
@@ -418,6 +429,19 @@ class DiscoveryNode:
             sender_id = payload.get('sender_id', 'Inconnu')
             msg = payload.get('text', '')
             print(f"\n[E2EE MSG] {sender_id[:8]} > {msg}\n")
+
+        elif msg_type == TYPE_MANIFEST:
+            self._handle_manifest(peer_id, payload)
+
+        elif msg_type == TYPE_CHUNK_REQ:
+            self._handle_chunk_req(peer_id, payload)
+
+        elif msg_type == TYPE_CHUNK_DATA:
+            self.transfer_mgr.handle_chunk_data(payload)
+
+        elif msg_type == TYPE_CHUNK_ACK:
+            # Gérer les erreurs NOT_FOUND si besoin
+            pass
             
         elif msg_type == TYPE_PING:
             # Répondre avec un PONG sécurisé
@@ -434,6 +458,80 @@ class DiscoveryNode:
             "timestamp": time.time()
         }
         self._send_secure_tlv(target_pid, TYPE_CHAT_MSG, payload)
+
+    def _handle_manifest(self, peer_id, manifest):
+        """Reçoit un manifest d'un pair."""
+        file_id = manifest.get('file_id')
+        if not file_id: return
+        
+        # Vérification de la signature du manifest
+        manifest_copy = manifest.copy()
+        sig_hex = manifest_copy.pop('signature', None)
+        if not sig_hex: return
+        
+        manifest_content = json.dumps(manifest_copy, sort_keys=True).encode('utf-8')
+        manifest_hash = hashlib.sha256(manifest_content).digest()
+        
+        if self.crypto.verify(manifest_hash, bytes.fromhex(sig_hex), manifest['sender_id']):
+            self.network_manifests[file_id] = manifest
+            print(f"[*] Nouveau Manifest reçu : {manifest['filename']} ({manifest['size'] // 1024} KB)")
+        else:
+            print(f"[!] Manifest invalide reçu de {peer_id[:8]}")
+
+    def _handle_chunk_req(self, peer_id, payload):
+        """Répond à une demande de chunk."""
+        file_id = payload.get('file_id')
+        chunk_idx = payload.get('chunk_idx')
+        
+        # Chercher le chunk localement
+        # On peut avoir le chunk soit via un fichier partagé, soit via le stockage
+        index = self.storage_mgr._load_index()
+        chunk_info = None
+        
+        # Optimisation : On cherche le hash du chunk dans le manifest correspondant
+        manifest = None
+        if file_id in index["files"]:
+            manifest = index["files"][file_id]["manifest"]
+        
+        if not manifest: return # On ne l'a pas
+        
+        chunk_hash = manifest["chunks"][chunk_idx]["hash"]
+        data = self.storage_mgr.get_chunk_data(chunk_hash)
+        
+        if data:
+            reply = {
+                "file_id": file_id,
+                "chunk_idx": chunk_idx,
+                "data": data.hex(),
+                "chunk_hash": chunk_hash,
+                "signature": self.crypto.sign(data).hex() # Signature du fournisseur
+            }
+            self._send_secure_tlv(peer_id, TYPE_CHUNK_DATA, reply)
+        else:
+            # Envoyer un ACK négatif
+            self._send_secure_tlv(peer_id, TYPE_CHUNK_ACK, {
+                "chunk_idx": chunk_idx,
+                "status": 0x02 # NOT_FOUND
+            })
+
+    def share_file(self, filepath):
+        """Prépare un fichier pour le partage et broadcast le manifest."""
+        manifest = self.file_mgr.create_manifest(filepath, self.crypto)
+        if not manifest:
+            print(f"[-] Impossible de créer le manifest pour {filepath}")
+            return
+        
+        self.storage_mgr.register_file(manifest, local_path=filepath)
+        print(f"[+] Fichier prêt pour le partage : {manifest['filename']} (ID: {manifest['file_id'][:16]})")
+        
+        # Broadcaster le manifest à tous les pairs connectés
+        with self.connections_lock:
+            targets = list(self.active_sessions.keys())
+            
+        for tid in targets:
+            self._send_secure_tlv(tid, TYPE_MANIFEST, manifest)
+        
+        print(f"[*] Manifest broadcasté à {len(targets)} pairs.")
 
     def keep_alive_connections(self):
         """Envoie un PING toutes les 15s sur chaque connexion active"""
@@ -473,6 +571,9 @@ class DiscoveryNode:
             print("Commandes :")
             print("  /list     - Liste les pairs sécurisés connectés")
             print("  /msg <txt> - Envoie un message à TOUS les pairs")
+            print("  /share <path> - Partage un fichier local")
+            print("  /files    - Liste les fichiers disponibles sur le réseau")
+            print("  /status   - Affiche l'état des téléchargements")
             print("  /quit     - Quitte le nœud")
             print("="*50 + "\n")
             
@@ -505,7 +606,48 @@ class DiscoveryNode:
                             for tid in targets:
                                 self.send_chat_message(tid, text)
                             print(f"[OK] Message envoyé à {len(targets)} pairs.")
+                    
+                    elif cmd.startswith("/share "):
+                        path = cmd[7:]
+                        self.share_file(path)
+
+                    elif cmd == "/files":
+                        print("\n--- Fichiers disponibles sur le réseau ---")
+                        if not self.network_manifests:
+                            print("Aucun fichier détecté pour le moment.")
+                        else:
+                            for fid, m in self.network_manifests.items():
+                                print(f"  [{fid[:16]}] {m['filename']} ({m['size'] // 1024} KB) - {m['nb_chunks']} chunks")
+                        
+                        print("\n--- Vos fichiers partagés ---")
+                        local_files = self.storage_mgr.get_available_files()
+                        for fid, info in local_files.items():
+                            print(f"  [{fid[:16]}] {info['manifest']['filename']} (Local)")
                             
+                    elif cmd == "/status":
+                        print("\n--- État des téléchargements ---")
+                        with self.transfer_mgr.download_lock:
+                            if not self.transfer_mgr.active_downloads:
+                                print("Aucun téléchargement en cours.")
+                            for fid, info in self.transfer_mgr.active_downloads.items():
+                                status = info["status"]
+                                prog = (info["received_count"] / info["total_chunks"]) * 100
+                                print(f"  [{fid[:16]}] {info['manifest']['filename']} : {prog:.1f}% ({status})")
+
+                    elif cmd.startswith("/download "):
+                        file_id_prefix = cmd[10:].strip()
+                        # Trouver le file_id complet à partir du préfixe
+                        target_fid = None
+                        for fid in self.network_manifests:
+                            if fid.startswith(file_id_prefix):
+                                target_fid = fid
+                                break
+                        
+                        if target_fid:
+                            self.transfer_mgr.start_download(target_fid)
+                        else:
+                            print(f"[-] Aucun fichier trouvé commençant par {file_id_prefix}")
+
                     elif cmd == "/quit":
                         print("[!] Arrêt demandé...")
                         os._exit(0)

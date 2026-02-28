@@ -12,6 +12,10 @@ TYPE_HANDSHAKE_AUTH = 6
 TYPE_HANDSHAKE_OK = 7
 TYPE_SECURE_MSG = 8
 TYPE_CHAT_MSG = 9
+TYPE_MANIFEST = 10
+TYPE_CHUNK_REQ = 11
+TYPE_CHUNK_DATA = 12
+TYPE_CHUNK_ACK = 13
 
 def encode_tlv(msg_type: int, payload: dict = None) -> bytes:
     """Encode un message au format Type-Length-Value."""
