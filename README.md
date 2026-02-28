@@ -125,6 +125,8 @@ Une fois le nœud lancé, tapez ces commandes dans l'invite `Archipel>` :
 ### 📦 Partage de Fichiers (P2P Transfer)
 - `/ls` : Liste les fichiers locaux (actuel + racine du projet).
 - `/share <nom_fichier>` : Découpe et met en partage un fichier.
+  - *Exemple (Linux)* : `/share /home/koffi/Documents/rapport.pdf`
+  - *Exemple (Windows)* : `/share C:\Users\Perso\Desktop\photo.jpg`
 - `/files` : Affiche les fichiers disponibles sur le réseau.
 - `/download <id_prefix>` : Démarre le téléchargement parallèle (multi-source).
 - `/status` : Affiche l'avancement (%) des téléchargements.
