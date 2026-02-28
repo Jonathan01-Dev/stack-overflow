@@ -88,7 +88,7 @@ class TransferManager:
         payload = {
             "file_id": file_id,
             "chunk_idx": chunk_idx,
-            "requester": self.node.NODE_ID
+            "requester": self.node.node_id
         }
         self.node._send_secure_tlv(peer_id, TYPE_CHUNK_REQ, payload)
         

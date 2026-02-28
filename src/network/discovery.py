@@ -63,6 +63,7 @@ else:
 
 class DiscoveryNode:
     def __init__(self):
+        self.node_id = NODE_ID  # Rendre l'ID accessible aux autres managers
         self.peer_table = PeerTable()
         self.crypto = CryptoManager(NODE_PRIVATE_HEX)
         self.active_sessions = {} # {node_id: CryptoSession}
