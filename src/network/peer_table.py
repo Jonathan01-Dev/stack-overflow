@@ -83,18 +83,19 @@ class PeerTable:
             print(f"[-] Erreur de sauvegarde de la table des pairs : {e}")
 
     def load(self):
-        """Chargement de la table depuis le disque"""
+        """Chargement de la table depuis le disque (Robuste)"""
         if os.path.exists(PEERS_FILE):
             try:
                 if os.path.getsize(PEERS_FILE) == 0:
                     self.peers = {}
                     return
-                content = f.read().strip()
+                with open(PEERS_FILE, "r", encoding="utf-8") as f:
+                    content = f.read().strip()
                 if not content:
                     self.peers = {}
                     return
                 self.peers = json.loads(content)
                 print(f"[+] Table des pairs chargée depuis le disque ({len(self.peers)} pairs)")
             except Exception as e:
-                print(f"[-] Erreur de lecture de la table des pairs (JSON invalide) : {e}")
+                print(f"[-] Erreur de lecture de la table des pairs : {e}")
                 self.peers = {}

@@ -433,47 +433,50 @@ class DiscoveryNode:
         payload_data = data[5:5+length]
         try:
             return msg_type, json.loads(payload_data.decode('utf-8'))
-        except:
+        except Exception as e:
+            print(f"[-] [DEBUG] Erreur de décodage message interne (type {msg_type}): {e}")
             return None, None
 
     def _process_message(self, peer_id, msg_type, payload):
         """Traite un message reçu et déchiffré."""
         print(f"[*] [DEBUG] Réception message type {msg_type} de {peer_id[:8]}")
         
-        if msg_type == TYPE_PEER_LIST:
-            new_peers = payload.get('peers', {})
-            added = 0
-            for pid, info in new_peers.items():
-                if pid != NODE_ID:
-                    if self.peer_table.add_or_update_peer(pid, info["ip"], info["port"]):
-                        added += 1
-            if added > 0:
-                print(f"[*] Reçu PEER_LIST chiffrée : {added} nouveaux pairs.")
+        try:
+            if msg_type == TYPE_PEER_LIST:
+                new_peers = payload.get('peers', {})
+                added = 0
+                for pid, info in new_peers.items():
+                    if pid != NODE_ID:
+                        # Correction : Utiliser 'port' car c'est ce qui est envoyé dans _build_peer_list_payload
+                        if self.peer_table.add_or_update_peer(pid, info["ip"], info["port"]):
+                            added += 1
+                if added > 0:
+                    print(f"[*] Reçu PEER_LIST chiffrée : {added} nouveaux pairs.")
 
-        elif msg_type == TYPE_CHAT_MSG:
-            sender_id = payload.get('sender_id', 'Inconnu')
-            msg = payload.get('text', '')
-            print(f"\n[E2EE MSG] {sender_id[:8]} > {msg}\n")
+            elif msg_type == TYPE_CHAT_MSG:
+                sender_id = payload.get('sender_id', 'Inconnu')
+                msg = payload.get('text', '')
+                print(f"\n[E2EE MSG] {sender_id[:8]} > {msg}\n")
 
-        elif msg_type == TYPE_MANIFEST:
-            self._handle_manifest(peer_id, payload)
+            elif msg_type == TYPE_MANIFEST:
+                self._handle_manifest(peer_id, payload)
 
-        elif msg_type == TYPE_CHUNK_REQ:
-            self._handle_chunk_req(peer_id, payload)
+            elif msg_type == TYPE_CHUNK_REQ:
+                self._handle_chunk_req(peer_id, payload)
 
-        elif msg_type == TYPE_CHUNK_DATA:
-            self.transfer_mgr.handle_chunk_data(payload)
+            elif msg_type == TYPE_CHUNK_DATA:
+                self.transfer_mgr.handle_chunk_data(payload)
 
-        elif msg_type == TYPE_CHUNK_ACK:
-            # Gérer les erreurs NOT_FOUND si besoin
-            pass
+            elif msg_type == TYPE_CHUNK_ACK:
+                # Gérer les erreurs NOT_FOUND si besoin
+                pass
+                
+            elif msg_type == TYPE_PING:
+                # Répondre avec un PONG sécurisé
+                self._send_secure_tlv(peer_id, TYPE_PONG, {})
             
-        elif msg_type == TYPE_PING:
-            # Répondre avec un PONG sécurisé
-            self._send_secure_tlv(peer_id, TYPE_PONG, {})
-            
-        elif msg_type == TYPE_PONG:
-            pass # Keep-alive validé
+        except Exception as e:
+            print(f"[-] Erreur lors du traitement d'un message ({msg_type}) de {peer_id[:8]} : {e}")
 
     def send_chat_message(self, target_pid, text):
         """Envoie un message de chat sécurisé à un pair spécifique."""
