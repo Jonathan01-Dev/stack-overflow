@@ -516,9 +516,19 @@ class DiscoveryNode:
 
     def share_file(self, filepath):
         """Prépare un fichier pour le partage et broadcast le manifest."""
+        # Résolution intelligente du chemin
+        if not os.path.exists(filepath):
+            # Tenter de trouver le fichier à la racine du projet
+            root_attempt = os.path.join(PROJECT_ROOT, filepath)
+            if os.path.exists(root_attempt):
+                filepath = root_attempt
+            else:
+                print(f"[-] Impossible de trouver le fichier : {filepath}")
+                return
+
         manifest = self.file_mgr.create_manifest(filepath, self.crypto)
         if not manifest:
-            print(f"[-] Impossible de créer le manifest pour {filepath}")
+            print(f"[-] Erreur lors de la création du manifest pour {filepath}")
             return
         
         self.storage_mgr.register_file(manifest, local_path=filepath)
@@ -571,6 +581,7 @@ class DiscoveryNode:
             print("Commandes :")
             print("  /list     - Liste les pairs sécurisés connectés")
             print("  /msg <txt> - Envoie un message à TOUS les pairs")
+            print("  /ls       - Liste les fichiers locaux (utile pour /share)")
             print("  /share <path> - Partage un fichier local")
             print("  /files    - Liste les fichiers disponibles sur le réseau")
             print("  /status   - Affiche l'état des téléchargements")
@@ -610,6 +621,21 @@ class DiscoveryNode:
                     elif cmd.startswith("/share "):
                         path = cmd[7:]
                         self.share_file(path)
+
+                    elif cmd == "/ls":
+                        print(f"\n--- Répertoire actuel : {os.getcwd()} ---")
+                        files = [f for f in os.listdir('.') if os.path.isfile(f)]
+                        for f in sorted(files):
+                            size = os.path.getsize(f) // 1024
+                            print(f"  {f} ({size} KB)")
+                        
+                        # Afficher aussi ce qu'il y a à la racine si on y est pas
+                        if os.getcwd() != PROJECT_ROOT:
+                            print(f"\n--- Racine du projet : {PROJECT_ROOT} ---")
+                            root_files = [f for f in os.listdir(PROJECT_ROOT) if os.path.isfile(f)]
+                            for f in sorted(root_files):
+                                size = os.path.getsize(os.path.join(PROJECT_ROOT, f)) // 1024
+                                print(f"  {f} ({size} KB)")
 
                     elif cmd == "/files":
                         print("\n--- Fichiers disponibles sur le réseau ---")
