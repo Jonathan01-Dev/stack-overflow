@@ -1,0 +1,32 @@
+{
+    "files": {
+        "7bd3d2f122351e9e8fab38c93b024900e6c9c730514a522711a7571ec03c8606": {
+            "manifest": {
+                "file_id": "7bd3d2f122351e9e8fab38c93b024900e6c9c730514a522711a7571ec03c8606",
+                "filename": "BBOX EDF.jpg",
+                "size": 474487,
+                "chunk_size": 524288,
+                "nb_chunks": 1,
+                "chunks": [
+                    {
+                        "index": 0,
+                        "hash": "7bd3d2f122351e9e8fab38c93b024900e6c9c730514a522711a7571ec03c8606",
+                        "size": 474487
+                    }
+                ],
+                "sender_id": "80be8e2f7d31c3c29303fde9d47b3850565e284eba5e736d9d85e9d8c8d354eb",
+                "signature": "df5a6998bdbdc83cae16d5c5325918ee030e728f31229cfe55490e70dfcbb062338bd575824e5b60f335fa8e2f93ce165516e97b8a57129d119e071624c1c40b"
+            },
+            "local_path": "/home/koffi/Bureau/PHOTOS/BBOX EDF.jpg",
+            "completed": true
+        }
+    },
+    "chunks": {
+        "7bd3d2f122351e9e8fab38c93b024900e6c9c730514a522711a7571ec03c8606": {
+            "file_id": "7bd3d2f122351e9e8fab38c93b024900e6c9c730514a522711a7571ec03c8606",
+            "index": 0,
+            "path": "/home/koffi/Bureau/PHOTOS/BBOX EDF.jpg",
+            "offset": 0
+        }
+    }
+}

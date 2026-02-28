@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Archipel | Messenger Sécurisé</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@700&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --sidebar-width: 260px;
+            --bg: #0f172a;
+            --glass: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --accent-cyan: #22d3ee;
+            --accent-green: #4ade80;
+            --text: #f8fafc;
+            --text-dim: #94a3b8;
+            --card-bg: rgba(15, 23, 42, 0.6);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            background-image:
+                radial-gradient(circle at 0% 0%, rgba(34, 211, 238, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 100% 100%, rgba(74, 222, 128, 0.05) 0%, transparent 50%);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid var(--glass-border);
+            display: flex;
+            flex-direction: column;
+            padding: 2rem 1.5rem;
+            z-index: 10;
+        }
+
+        .logo-area {
+            margin-bottom: 3rem;
+        }
+
+        .logo-text {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.6rem;
+            color: var(--accent-cyan);
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-menu {
+            list-style: none;
+            flex: 1;
+        }
+
+        .nav-item {
+            padding: 0.8rem 1rem;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-dim);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-weight: 500;
+        }
+
+        .nav-item:hover {
+            background: var(--glass);
+            color: var(--text);
+        }
+
+        .nav-item.active {
+            background: rgba(34, 211, 238, 0.1);
+            color: var(--accent-cyan);
+            box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.2);
+        }
+
+        /* Main Content */
+        .content-area {
+            flex: 1;
+            padding: 2.5rem 3rem;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .page {
+            display: none;
+            animation: slideUp 0.4s ease-out;
+            height: 100%;
+        }
+
+        .page.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .section-header {
+            margin-bottom: 2rem;
+        }
+
+        .section-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .section-subtitle {
+            color: var(--text-dim);
+            font-size: 0.95rem;
+        }
+
+        /* General Cards */
+        .glass-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.2rem;
+        }
+
+        /* Messenger Full Interface */
+        .messenger-layout {
+            display: flex;
+            flex: 1;
+            background: rgba(15, 23, 42, 0.4);
+            border-radius: 24px;
+            border: 1px solid var(--glass-border);
+            overflow: hidden;
+            margin-bottom: 2rem;
+        }
+
+        .messenger-aside {
+            width: 320px;
+            border-right: 1px solid var(--glass-border);
+            display: flex;
+            flex-direction: column;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .aside-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--glass-border);
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .conv-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .conv-item {
+            padding: 1.2rem 1.5rem;
+            cursor: pointer;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .conv-item:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .conv-item.active {
+            background: rgba(34, 211, 238, 0.08);
+            border-left: 4px solid var(--accent-cyan);
+        }
+
+        .avatar {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, var(--accent-cyan), var(--accent-green));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            color: var(--bg);
+            font-size: 0.8rem;
+        }
+
+        .conv-info {
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .conv-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 0.2rem;
+        }
+
+        .conv-last {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .chat-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: url('https://www.transparenttextures.com/patterns/carbon-fibre.png');
+            /* Subtle texture */
+        }
+
+        .chat-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--glass-border);
+            background: rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+        }
+
+        .bubble {
+            padding: 0.7rem 1.1rem;
+            border-radius: 18px;
+            max-width: 80%;
+            font-size: 0.9rem;
+            line-height: 1.4;
+            position: relative;
+        }
+
+        .bubble-out {
+            align-self: flex-end;
+            background: var(--accent-cyan);
+            color: var(--bg);
+            border-bottom-right-radius: 4px;
+        }
+
+        .bubble-in {
+            align-self: flex-start;
+            background: rgba(255, 255, 255, 0.08);
+            color: white;
+            border-bottom-left-radius: 4px;
+            border: 1px solid var(--glass-border);
+        }
+
+        .chat-input-container {
+            padding: 1.2rem;
+            background: rgba(0, 0, 0, 0.4);
+            display: flex;
+            gap: 1rem;
+        }
+
+        .input-box {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            padding: 0.8rem 1.2rem;
+            color: white;
+            outline: none;
+            transition: 0.3s;
+        }
+
+        .input-box:focus {
+            border-color: var(--accent-cyan);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .btn {
+            padding: 0.7rem 1.5rem;
+            border-radius: 12px;
+            border: none;
+            cursor: pointer;
+            font-weight: 700;
+            transition: 0.2s;
+        }
+
+        .btn-send {
+            background: var(--accent-cyan);
+            color: var(--bg);
+        }
+
+        .btn-send:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(34, 211, 238, 0.4);
+        }
+
+        .empty-state {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-dim);
+            text-align: center;
+        }
+
+        .badge-trusted {
+            font-size: 0.6rem;
+            background: var(--accent-green);
+            color: var(--bg);
+            padding: 1px 4px;
+            border-radius: 4px;
+            vertical-align: middle;
+            margin-left: 5px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="sidebar">
+        <div class="logo-area">
+            <div class="logo-text">⚓ ARCHIPEL</div>
+        </div>
+        <ul class="nav-menu">
+            <li class="nav-item" onclick="switchPage('dashboard', this)">🛸 Dashboard</li>
+            <li class="nav-item active" onclick="switchPage('messenger', this)">💬 Messenger</li>
+            <li class="nav-item" onclick="switchPage('files', this)">📂 Fichiers</li>
+            <li class="nav-item" onclick="switchPage('wot', this)">🔰 Web of Trust</li>
+            <li class="nav-item" onclick="switchPage('settings', this)">⚙️ Réglages</li>
+        </ul>
+        <div style="margin-top: auto; font-size: 0.75rem; color: var(--text-dim)">
+            <p>Mon ID: <span id="my-node-id" style="color:var(--accent-cyan)">...</span></p>
+            <p>Status: <span style="color:var(--accent-green)">● EN LIGNE</span></p>
+        </div>
+    </div>
+
+    <div class="content-area">
+
+        <!-- MESSENGER PAGE -->
+        <div id="page-messenger" class="page active">
+            <div class="section-header">
+                <h1 class="section-title">💬 Messenger</h1>
+                <p class="section-subtitle">Communication souveraine, chiffrée de bout en bout et sans intermédiaire.
+                </p>
+            </div>
+
+            <div class="messenger-layout">
+                <!-- PANNEAU GAUCHE : LISTE DES PAIRS -->
+                <aside class="messenger-aside">
+                    <div class="aside-header">Discussions</div>
+                    <div id="conv-list" class="conv-list">
+                        <!-- Peuplé par JS -->
+                        <div style="padding: 2rem; text-align: center; color: var(--text-dim); font-size: 0.85rem;">
+                            Recherche de pairs...</div>
+                    </div>
+                </aside>
+
+                <!-- PANNEAU DROIT : ZONE DE CHAT -->
+                <main class="chat-main" id="chat-container">
+                    <div id="chat-empty" class="empty-state">
+                        <div style="font-size: 4rem; opacity: 0.2; margin-bottom: 1rem;">⚓</div>
+                        <h3>Prêt à communiquer ?</h3>
+                        <p style="font-size: 0.9rem; max-width: 250px; margin-top: 0.5rem;">Sélectionnez un pair à
+                            gauche pour ouvrir une session de chat chiffrée.</p>
+                    </div>
+
+                    <div id="chat-active" style="display: none; flex-direction: column; height: 100%;">
+                        <div class="chat-header">
+                            <div class="avatar" id="active-avatar">?</div>
+                            <div>
+                                <div id="active-name" style="font-weight: 700;">Désiré</div>
+                                <div
+                                    style="font-size: 0.7rem; color: var(--accent-cyan); display: flex; align-items: center; gap: 4px;">
+                                    <span
+                                        style="display:inline-block; width:6px; height:6px; background:var(--accent-cyan); border-radius:50%"></span>
+                                    CHIFFrÉ PAR E2EE (X25519)
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chat-messages" id="chat-messages">
+                            <!-- Les bulles de message iront ici -->
+                        </div>
+                        <div class="chat-input-container">
+                            <input type="text" id="chat-input" class="input-box" placeholder="Votre message secret..."
+                                onkeypress="if(event.key==='Enter') sendChatMessage()">
+                            <button class="btn btn-send" onclick="sendChatMessage()">Envoyer</button>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </div>
+
+        <!-- AUTRES PAGES (Dashboard, Fichiers, etc.) -->
+        <div id="page-dashboard" class="page">
+            <div class="section-header">
+                <h1 class="section-title">🛸 Dashboard</h1>
+            </div>
+            <div class="glass-card">Statistiques du nœud à venir...</div>
+        </div>
+        <div id="page-files" class="page">
+            <div class="section-header">
+                <h1 class="section-title">📂 Fichiers</h1>
+            </div>
+            <div id="files-grid" class="grid-container"></div>
+        </div>
+        <div id="page-wot" class="page">
+            <div class="section-header">
+                <h1 class="section-title">🔰 Web of Trust</h1>
+            </div>
+            <div id="wot-grid" class="grid-container"></div>
+        </div>
+        <div id="page-settings" class="page">
+            <div class="section-header">
+                <h1 class="section-title">⚙️ Réglages</h1>
+            </div>
+            <div id="settings-card" class="glass-card">Configuration technique...</div>
+        </div>
+
+    </div>
+
+    <script>
+        const API = '/api';
+        let currentPeer = null;
+        let pollTimer = null;
+
+        function switchPage(pageId, el) {
+            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            el.classList.add('active');
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById('page-' + pageId).classList.add('active');
+
+            if (pageId === 'messenger') { startPolling(); } else { stopPolling(); }
+        }
+
+        async function updateStatus() {
+            try {
+                const res = await fetch(`${API}/status`);
+                const s = await res.json();
+                document.getElementById('my-node-id').textContent = s.node_id.substring(0, 8);
+
+                // Peupler la liste des pairs à gauche
+                const pRes = await fetch(`${API}/peers`);
+                const peers = await pRes.json();
+                const list = document.getElementById('conv-list');
+
+                if (peers.length === 0) {
+                    list.innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--text-dim); font-size: 0.85rem;">Aucun pair actif.</div>';
+                } else {
+                    list.innerHTML = peers.map(p => `
+                        <div class="conv-item ${currentPeer === p.id ? 'active' : ''}" onclick="openConversation('${p.id}')">
+                            <div class="avatar">${p.id.substring(0, 2).toUpperCase()}</div>
+                            <div class="conv-info">
+                                <div class="conv-name">${p.id.substring(0, 12)}... ${p.trusted ? '<span class="badge-trusted">TRUSTED</span>' : ''}</div>
+                                <div class="conv-last">${p.address}:${p.port}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) { console.error("Poll error", e); }
+        }
+
+        function openConversation(pid) {
+            currentPeer = pid;
+            document.getElementById('chat-empty').style.display = 'none';
+            document.getElementById('chat-active').style.display = 'flex';
+            document.getElementById('active-name').textContent = "Pair " + pid.substring(0, 16);
+            document.getElementById('active-avatar').textContent = pid.substring(0, 2).toUpperCase();
+
+            // Forcer le rafraîchissement des messages
+            loadMessages();
+            // Mettre à jour l'état visuel de la liste
+            document.querySelectorAll('.conv-item').forEach(c => c.classList.remove('active'));
+        }
+
+        async function loadMessages() {
+            if (!currentPeer) return;
+            try {
+                const res = await fetch(`${API}/messages/${currentPeer.substring(0, 8)}`);
+                const messages = await res.json();
+                const box = document.getElementById('chat-messages');
+
+                // On compare par longueur pour éviter de tout redessiner si pas de changement
+                if (messages.length !== box.children.length) {
+                    box.innerHTML = messages.map(m => `
+                        <div class="bubble ${m.type === 'out' ? 'bubble-out' : 'bubble-in'}">
+                            ${m.text}
+                        </div>
+                    `).join('');
+                    box.scrollTop = box.scrollHeight;
+                }
+            } catch (e) { }
+        }
+
+        async function sendChatMessage() {
+            const input = document.getElementById('chat-input');
+            const txt = input.value.trim();
+            if (!txt || !currentPeer) return;
+
+            input.value = "";
+            try {
+                await fetch(`${API}/msg`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target: currentPeer, text: txt })
+                });
+                loadMessages(); // Directement charger après envoi
+            } catch (e) { alert("Erreur d'envoi"); }
+        }
+
+        function startPolling() {
+            if (pollTimer) clearInterval(pollTimer);
+            pollTimer = setInterval(() => {
+                updateStatus();
+                loadMessages();
+            }, 2000);
+        }
+
+        function stopPolling() {
+            if (pollTimer) clearInterval(pollTimer);
+            pollTimer = null;
+        }
+
+        // Initialisation
+        updateStatus();
+        startPolling();
+    </script>
+</body>
+
+</html>

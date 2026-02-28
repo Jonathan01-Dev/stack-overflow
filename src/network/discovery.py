@@ -35,21 +35,14 @@ CLR_YELLOW = "\033[93m"
 CLR_RED = "\033[91m"
 CLR_BLUE = "\033[94m"
 
+# Configuration par défaut (peut être surchargée par des variables d'environnement)
 MCAST_GRP = '239.255.42.99'
 MCAST_PORT = 6000
 TCP_PORT = int(os.environ.get("TCP_PORT", 7777))
-
-# Parser les arguments pour supporter plusieurs instances locales pour le test S1
-parser = argparse.ArgumentParser(description="P2P Discovery Node")
-parser.add_argument('--port', type=int, help="Override TCP port", default=None)
-parser.add_argument('--key', type=str, help="Override path to node.key for multiple instances", default="node.key")
-args = parser.parse_args()
-
-if args.port:
-    TCP_PORT = args.port
+ARG_KEY = os.environ.get("NODE_KEY", "node.key")
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-KEY_PATH = os.path.join(PROJECT_ROOT, args.key)
+KEY_PATH = os.path.join(PROJECT_ROOT, ARG_KEY)
 
 def get_private_key():
     if not os.path.exists(KEY_PATH):
@@ -87,6 +80,10 @@ class DiscoveryNode:
         
         # Manifests reçus du réseau : {file_id: manifest}
         self.network_manifests = {}
+        
+        # Historique des messages : {peer_id: [ {sender, text, timestamp, type} ]}
+        self.message_history = {}
+        self.history_lock = threading.Lock()
 
     def start_beacon(self):
         """Envoie un paquet HELLO toutes les 30 secondes"""
@@ -466,6 +463,16 @@ class DiscoveryNode:
                 sender_id = payload.get('sender_id', 'Inconnu')
                 msg = payload.get('text', '')
                 print(f"\n[E2EE MSG] {sender_id[:8]} > {msg}\n")
+                
+                with self.history_lock:
+                    if peer_id not in self.message_history:
+                        self.message_history[peer_id] = []
+                    self.message_history[peer_id].append({
+                        "sender": sender_id,
+                        "text": msg,
+                        "timestamp": payload.get('timestamp', time.time()),
+                        "type": "in"
+                    })
 
             elif msg_type == TYPE_MANIFEST:
                 self._handle_manifest(peer_id, payload)
@@ -489,11 +496,24 @@ class DiscoveryNode:
 
     def send_chat_message(self, target_pid, text):
         """Envoie un message de chat sécurisé à un pair spécifique."""
+        ts = time.time()
         payload = {
             "sender_id": NODE_ID,
             "text": text,
-            "timestamp": time.time()
+            "timestamp": ts
         }
+        
+        # Stocker dans l'historique local
+        with self.history_lock:
+            if target_pid not in self.message_history:
+                self.message_history[target_pid] = []
+            self.message_history[target_pid].append({
+                "sender": NODE_ID,
+                "text": text,
+                "timestamp": ts,
+                "type": "out"
+            })
+            
         self._send_secure_tlv(target_pid, TYPE_CHAT_MSG, payload)
 
     def _handle_manifest(self, peer_id, manifest):
@@ -632,117 +652,169 @@ class DiscoveryNode:
             time.sleep(30)
 
     def start_cli(self):
-        """Interface de chat interactive en ligne de commande"""
+        """Interface interactive 'Premium' pour la démo (Sprint 4)"""
         def run():
-            time.sleep(2) # Attendre que le serveur démarre
-            print("\n" + "="*50)
-            print("🚀 TERMINAL CHAT ARCHIPEL (Sprint 3 - P2P Transfer)")
-            print("Commandes :")
-            print("  /list     - Liste les pairs sécurisés connectés")
-            print("  /msg <txt> - Envoie un message à TOUS les pairs")
-            print("  /ls       - Liste les fichiers locaux (utile pour /share)")
-            print("  /share <path> - Partage un fichier local")
-            print("  /files    - Liste les fichiers disponibles sur le réseau")
-            print("  /status   - Affiche l'état des téléchargements")
-            print("  /quit     - Quitte le nœud")
-            print("="*50 + "\n")
+            time.sleep(1.5)
+            banner = f"""
+{CLR_CYAN}{CLR_BOLD}
+   ┌──────────────────────────────────────────────────┐
+   │  {CLR_YELLOW}⚓ ARCHIPEL - PROTOCOLE P2P SOUVERAIN (v1.0) {CLR_CYAN}    │
+   │  {CLR_RESET}Sécurité: Ed25519 + X25519 + AES-256-GCM {CLR_CYAN}     │
+   └──────────────────────────────────────────────────┘
+{CLR_RESET}"""
+            print(banner)
+            print(f"{CLR_GREEN}[*] Nœud prêt. Tapez 'help' pour les commandes.{CLR_RESET}\n")
             
             while True:
                 try:
-                    cmd = input("Archipel> ").strip()
-                    if not cmd: continue
+                    line = input(f"{CLR_BOLD}Archipel>{CLR_RESET} ").strip()
+                    if not line: continue
                     
-                    if cmd == "/list":
+                    parts = line.split()
+                    cmd = parts[0].lower()
+                    args = parts[1:]
+
+                    if cmd == "archipel" and len(args) > 0:
+                        cmd = args[0].lower()
+                        args = args[1:]
+
+                    if cmd in ["help", "?", "/help"]:
+                        print(f"\n{CLR_BOLD}Commandes disponibles :{CLR_RESET}")
+                        print(f"  {CLR_CYAN}peers{CLR_RESET}             - Lister les pairs sécurisés connectés")
+                        print(f"  {CLR_CYAN}msg <id> <txt>{CLR_RESET}   - Envoyer un message chiffré")
+                        print(f"  {CLR_CYAN}msg all <txt>{CLR_RESET}    - Diffuser un message à tous")
+                        print(f"  {CLR_CYAN}send <path>{CLR_RESET}      - Partager un fichier local")
+                        print(f"  {CLR_CYAN}receive{CLR_RESET}           - Voir les fichiers disponibles sur le réseau")
+                        print(f"  {CLR_CYAN}download <id>{CLR_RESET}     - Télécharger un fichier")
+                        print(f"  {CLR_CYAN}status{CLR_RESET}            - État du nœud + stats réseau")
+                        print(f"  {CLR_CYAN}ls{CLR_RESET}                - Lister les fichiers du répertoire actuel")
+                        print(f"  {CLR_CYAN}trust <id>{CLR_RESET}        - Approuver un pair (Web of Trust)")
+                        print(f"  {CLR_CYAN}quit{CLR_RESET}             - Arrêter le nœud\n")
+
+                    elif cmd == "peers":
                         with self.connections_lock:
                             count = len(self.active_sessions)
-                            print(f"[*] {count} pairs sécurisés connectés :")
+                            print(f"\n{CLR_BOLD}[*] {count} pairs connectés :{CLR_RESET}")
+                            if not count:
+                                print(f"  {CLR_RED}(Aucune session active){CLR_RESET}")
                             for pid in self.active_sessions:
-                                print(f"  - {pid[:16]}...")
-                    
-                    elif cmd == "/debug":
-                        with self.connections_lock:
-                            print(f"[DEBUG] active_sessions: {list(self.active_sessions.keys())}")
-                            print(f"[DEBUG] active_connections: {list(self.active_connections.keys())}")
-                            print(f"[DEBUG] peer_table: {len(self.peer_table.get_all())} nodes")
+                                peer_info = self.peer_table.get_peer(pid)
+                                trust_icon = "🔰" if peer_info and peer_info.get("trusted") else "❓"
+                                print(f"  {trust_icon} {CLR_CYAN}{pid[:16]}...{CLR_RESET}")
+                        print("")
 
-                    elif cmd.startswith("/msg "):
-                        text = cmd[5:]
+                    elif cmd == "msg":
+                        if len(args) < 2:
+                            print(f"{CLR_RED}[!] Syntaxe: msg <node_id|all> <texte>{CLR_RESET}")
+                            continue
+                        target = args[0]
+                        text = " ".join(args[1:])
                         with self.connections_lock:
-                            targets = list(self.active_sessions.keys())
-                        
-                        if not targets:
-                            print("[!] Aucun pair connecté pour envoyer le message.")
+                            active_pids = list(self.active_sessions.keys())
+                        if target == "all":
+                            for pid in active_pids:
+                                self.send_chat_message(pid, text)
+                            print(f"{CLR_GREEN}[OK] Message diffusé à {len(active_pids)} pairs.{CLR_RESET}")
                         else:
-                            for tid in targets:
-                                self.send_chat_message(tid, text)
-                            print(f"[OK] Message envoyé à {len(targets)} pairs.")
-                    
-                    elif cmd.startswith("/share "):
-                        path = cmd[7:].strip().replace("<", "").replace(">", "")
+                            full_target = None
+                            for pid in active_pids:
+                                if pid.startswith(target):
+                                    full_target = pid
+                                    break
+                            if full_target:
+                                self.send_chat_message(full_target, text)
+                                print(f"{CLR_GREEN}[OK] Message envoyé à {full_target[:16]}...{CLR_RESET}")
+                            else:
+                                print(f"{CLR_RED}[!] Pair {target} introuvable ou non connecté.{CLR_RESET}")
+
+                    elif cmd == "send":
+                        if not args:
+                            print(f"{CLR_RED}[!] Syntaxe: send <filepath>{CLR_RESET}")
+                            continue
+                        path = " ".join(args).replace("<", "").replace(">", "").strip()
                         self.share_file(path)
 
-                    elif cmd == "/ls":
-                        print(f"\n--- Répertoire actuel : {os.getcwd()} ---")
-                        files = [f for f in os.listdir('.') if os.path.isfile(f)]
-                        for f in sorted(files):
-                            size = os.path.getsize(f) // 1024
-                            print(f"  {f} ({size} KB)")
-                        
-                        # Afficher aussi ce qu'il y a à la racine si on y est pas
-                        if os.getcwd() != PROJECT_ROOT:
-                            print(f"\n--- Racine du projet : {PROJECT_ROOT} ---")
-                            root_files = [f for f in os.listdir(PROJECT_ROOT) if os.path.isfile(f)]
-                            for f in sorted(root_files):
-                                size = os.path.getsize(os.path.join(PROJECT_ROOT, f)) // 1024
-                                print(f"  {f} ({size} KB)")
-
-                    elif cmd == "/files":
-                        print("\n--- Fichiers disponibles sur le réseau ---")
+                    elif cmd in ["receive", "files"]:
+                        print(f"\n{CLR_BOLD}--- Catalogue Réseau ---{CLR_RESET}")
                         if not self.network_manifests:
-                            print("Aucun fichier détecté pour le moment.")
+                            print(f"  {CLR_YELLOW}Aucun fichier détecté.{CLR_RESET}")
                         else:
                             for fid, m in self.network_manifests.items():
-                                print(f"  [{fid[:16]}] {m['filename']} ({m['size'] // 1024} KB) - {m['nb_chunks']} chunks")
-                        
-                        print("\n--- Vos fichiers partagés ---")
+                                print(f"  📄 [{CLR_CYAN}{fid[:8]}{CLR_RESET}] {m['filename']} ({m['size'] // 1024} KB)")
+                        print(f"\n{CLR_BOLD}--- Vos Fichiers ---{CLR_RESET}")
                         local_files = self.storage_mgr.get_available_files()
                         for fid, info in local_files.items():
-                            print(f"  [{fid[:16]}] {info['manifest']['filename']} (Local)")
-                            
-                    elif cmd == "/status":
-                        print("\n--- État des téléchargements ---")
-                        with self.transfer_mgr.download_lock:
-                            if not self.transfer_mgr.active_downloads:
-                                print("Aucun téléchargement en cours.")
-                            for fid, info in self.transfer_mgr.active_downloads.items():
-                                status = info["status"]
-                                prog = (info["received_count"] / info["total_chunks"]) * 100
-                                print(f"  [{fid[:16]}] {info['manifest']['filename']} : {prog:.1f}% ({status})")
+                            print(f"  🏠 [{CLR_GREEN}{fid[:8]}{CLR_RESET}] {info['manifest']['filename']} (Local)")
+                        print("")
 
-                    elif cmd.startswith("/download "):
-                        # Nettoyer l'id (enlever les espaces et les éventuels < > tapés par erreur)
-                        file_id_prefix = cmd[10:].strip().replace("<", "").replace(">", "")
-                        # Trouver le file_id complet à partir du préfixe
+                    elif cmd == "download":
+                        if not args:
+                            print(f"{CLR_RED}[!] Syntaxe: download <file_id_prefix>{CLR_RESET}")
+                            continue
+                        prefix = args[0]
                         target_fid = None
                         for fid in self.network_manifests:
-                            if fid.startswith(file_id_prefix):
+                            if fid.startswith(prefix):
                                 target_fid = fid
                                 break
-                        
                         if target_fid:
+                            print(f"{CLR_BLUE}[*] Requête de téléchargement pour {target_fid[:8]}...{CLR_RESET}")
                             self.transfer_mgr.start_download(target_fid)
                         else:
-                            print(f"[-] Aucun fichier trouvé commençant par {file_id_prefix}")
+                            print(f"{CLR_RED}[!] Aucun fichier réseau trouvé pour '{prefix}'.{CLR_RESET}")
 
-                    elif cmd == "/quit":
-                        print("[!] Arrêt demandé...")
+                    elif cmd == "status":
+                        print(f"\n{CLR_BOLD}--- État du Nœud ---{CLR_RESET}")
+                        print(f"  Identité : {CLR_CYAN}{NODE_ID}{CLR_RESET}")
+                        print(f"  Port TCP : {CLR_YELLOW}{TCP_PORT}{CLR_RESET}")
+                        with self.transfer_mgr.download_lock:
+                            if self.transfer_mgr.active_downloads:
+                                print(f"\n{CLR_BOLD}Téléchargements :{CLR_RESET}")
+                                for fid, info in self.transfer_mgr.active_downloads.items():
+                                    prog = (info["received_count"] / info["total_chunks"]) * 100
+                                    bar_len = 20
+                                    filled = int(prog / 100 * bar_len)
+                                    bar = "█" * filled + "░" * (bar_len - filled)
+                                    print(f"  [{fid[:8]}] {info['manifest']['filename']:<20} |{CLR_GREEN}{bar}{CLR_RESET}| {prog:5.1f}%")
+                            else:
+                                print("\n  (Aucun transfert actif)")
+                        print("")
+
+                    elif cmd == "trust":
+                        if not args:
+                            print(f"{CLR_RED}[!] Syntaxe: trust <node_id_prefix>{CLR_RESET}")
+                            continue
+                        prefix = args[0]
+                        found = False
+                        for pid in list(self.peer_table.get_all().keys()):
+                            if pid.startswith(prefix):
+                                if pid in self.peer_table.peers:
+                                    self.peer_table.peers[pid]["trusted"] = True
+                                    self.peer_table.save()
+                                    print(f"{CLR_GREEN}[WOT] Pair {pid[:16]}... marqué comme de CONFIANCE.{CLR_RESET}")
+                                    found = True
+                                    break
+                        if not found:
+                            print(f"{CLR_RED}[!] Aucun pair connu avec le préfixe {prefix}.{CLR_RESET}")
+
+                    elif cmd == "ls":
+                        print(f"\n{CLR_BOLD}Recherche dans : {os.getcwd()}{CLR_RESET}")
+                        if os.path.exists('.'):
+                            for f in sorted(os.listdir('.')):
+                                if os.path.isfile(f):
+                                    print(f"  - {f}")
+                        print("")
+
+                    elif cmd == "quit":
+                        print(f"{CLR_YELLOW}[!] Fermeture d'Archipel...{CLR_RESET}")
                         os._exit(0)
                     else:
-                        print("[?] Commande inconnue. Utilisez /msg message_ici")
+                        print(f"{CLR_RED}[?] Commande inconnue. Tapez 'help'.{CLR_RESET}")
                 except EOFError:
                     break
                 except Exception as e:
-                    print(f"[-] Erreur CLI : {e}")
+                    print(f"{CLR_RED}[!] Erreur CLI : {e}{CLR_RESET}")
+
 
         threading.Thread(target=run, daemon=True).start()
 

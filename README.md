@@ -134,3 +134,4 @@ Une fois le nœud lancé, tapez ces commandes dans l'invite `Archipel>` :
 ### 🛠️ Utilitaires
 - `/debug` : État technique des sessions et connexions.
 - `/quit` : Arrête le nœud.
+"- `/share /home/koffi/Téléchargements/Wireshark-4.6.4-x64.exe` 
