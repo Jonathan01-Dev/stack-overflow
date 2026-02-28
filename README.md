@@ -84,4 +84,51 @@ Types de paquets :
 | `NODE_ID` | 32 bytes | Clé publique Ed25519 de l'émetteur |
 | `PAYLOAD_LEN` | 4 bytes | Taille du payload en bytes |
 
+## 4. Guide d'Utilisation (Sprint 2 & 3)
 
+### Installation & Configuration
+1.  **Cloner le projet** et se placer à la racine :
+    ```bash
+    git clone https://github.com/Jonathan01-Dev/stack-overflow.git
+    cd stack-overflow
+    ```
+2.  **Installer les dépendances** :
+    ```bash
+    pip install -r requirements.txt
+    ```
+3.  **Générer votre identité** (obligatoire au premier lancement) :
+    ```bash
+    python src/crypto/generate_identity.py
+    ```
+
+### Lancement des Nœuds
+Lancer les terminaux depuis le dossier `src/network` :
+```bash
+cd src/network
+
+# Nœud Alice (Port par défaut 7777)
+python discovery.py --port 7777 --key node.key
+
+# Nœud Bob (Port 7778, Clé différente)
+python discovery.py --port 7778 --key node2.key
+```
+
+---
+
+## 5. Répertoire des Commandes CLI
+Une fois le nœud lancé, tapez ces commandes dans l'invite `Archipel>` :
+
+### 💬 Messagerie Sécurisée (E2EE)
+- `/msg <texte>` : Envoie un message chiffré à tous les pairs connectés.
+- `/list` : Affiche les identités (`node_id`) des pairs connectés dans le tunnel.
+
+### 📦 Partage de Fichiers (P2P Transfer)
+- `/ls` : Liste les fichiers locaux (actuel + racine du projet).
+- `/share <nom_fichier>` : Découpe et met en partage un fichier.
+- `/files` : Affiche les fichiers disponibles sur le réseau.
+- `/download <id_prefix>` : Démarre le téléchargement parallèle (multi-source).
+- `/status` : Affiche l'avancement (%) des téléchargements.
+
+### 🛠️ Utilitaires
+- `/debug` : État technique des sessions et connexions.
+- `/quit` : Arrête le nœud.
