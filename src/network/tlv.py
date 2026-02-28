@@ -6,6 +6,12 @@ import socket
 TYPE_PEER_LIST = 1
 TYPE_PING = 2
 TYPE_PONG = 3
+TYPE_HANDSHAKE_HELLO = 4
+TYPE_HANDSHAKE_REPLY = 5
+TYPE_HANDSHAKE_AUTH = 6
+TYPE_HANDSHAKE_OK = 7
+TYPE_SECURE_MSG = 8
+TYPE_CHAT_MSG = 9
 
 def encode_tlv(msg_type: int, payload: dict = None) -> bytes:
     """Encode un message au format Type-Length-Value."""

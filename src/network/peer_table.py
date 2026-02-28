@@ -17,18 +17,25 @@ class PeerTable:
         return self.peers
 
     def add_or_update_peer(self, node_id, ip, tcp_port, shared_files=None):
-        """Met à jour un pair existant ou ajoute un nouveau pair"""
+        """Met à jour un pair existant ou ajoute un nouveau pair (Implémentation TOFU)"""
         is_new = node_id not in self.peers
         
         if is_new:
+            # Premier contact : on enregistre l'identité du pair (Trust On First Use)
             self.peers[node_id] = {
                 "ip": ip,
                 "tcp_port": tcp_port,
                 "last_seen": time.time(),
                 "shared_files": shared_files if shared_files is not None else [],
-                "reputation": 1.0 # Score de fiabilité initial
+                "reputation": 1.0, 
+                "trusted": True # Initialement de confiance via TOFU
             }
+            print(f"[WOT] Nouveau pair mémorisé (TOFU) : {node_id}")
         else:
+            # Vérification d'identité (Détection MITM)
+            # Puisque le node_id EST la clé publique hexadécimale, toute incohérence 
+            # est gérée structurellement, mais on pourrait imaginer un changement d'IP 
+            # légitime tout en gardant le même node_id.
             self.peers[node_id]["ip"] = ip
             self.peers[node_id]["tcp_port"] = tcp_port
             self.peers[node_id]["last_seen"] = time.time()
