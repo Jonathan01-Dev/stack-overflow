@@ -17,7 +17,7 @@ from peer_table import PeerTable
 from tlv import (
     encode_tlv, decode_tlv, TYPE_PEER_LIST, TYPE_PING, TYPE_PONG,
     TYPE_HANDSHAKE_HELLO, TYPE_HANDSHAKE_REPLY, TYPE_HANDSHAKE_AUTH,
-    TYPE_HANDSHAKE_OK, TYPE_SECURE_MSG
+    TYPE_HANDSHAKE_OK, TYPE_SECURE_MSG, TYPE_CHAT_MSG
 )
 from crypto_manager import CryptoManager, CryptoSession, generate_ephemeral_keypair, compute_shared_secret
 
@@ -356,16 +356,28 @@ class DiscoveryNode:
             
             # 3. Attendre AUTH
             m_type, req = decode_tlv(conn)
-            if m_type != TYPE_HANDSHAKE_AUTH: return None, None
+            if m_type != TYPE_HANDSHAKE_AUTH: 
+                print(f"[-] Handshake : Attendu AUTH, reçu type {m_type}")
+                return None, None
             
+            if 'nonce' not in req or 'auth' not in req:
+                print(f"[-] Handshake : Payload AUTH invalide (version incompatible ?)")
+                return None, None
+
             nonce = bytes.fromhex(req['nonce'])
             encrypted_auth = bytes.fromhex(req['auth'])
             auth_json_data = session.decrypt(nonce, encrypted_auth)
-            if auth_json_data is None: return None, None
+            if auth_json_data is None: 
+                print(f"[-] Handshake : Échec déchiffrement AUTH")
+                return None, None
             
-            auth_info = json.loads(auth_json_data.decode('utf-8'))
-            a_node_id = auth_info['node_id']
-            a_sig = bytes.fromhex(auth_info['sig'])
+            try:
+                auth_info = json.loads(auth_json_data.decode('utf-8'))
+                a_node_id = auth_info['node_id']
+                a_sig = bytes.fromhex(auth_info['sig'])
+            except (json.JSONDecodeError, KeyError) as e:
+                print(f"[-] Handshake : Erreur structure AUTH : {e}")
+                return None, None
             
             # 4. Vérifier signature de Alice (TOFU)
             import hashlib
