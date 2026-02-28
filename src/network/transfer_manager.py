@@ -90,7 +90,7 @@ class TransferManager:
             "chunk_idx": chunk_idx,
             "requester": self.node.node_id
         }
-        self.node._send_secure_tlv(peer_id, TYPE_CHUNK_REQ, payload)
+        self.node._send_secure_v1(peer_id, TYPE_CHUNK_REQ, payload)
         
         # Attendre la réponse (timeout 5s)
         if event.wait(timeout=5.0):

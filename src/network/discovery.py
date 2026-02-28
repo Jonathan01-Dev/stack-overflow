@@ -471,6 +471,13 @@ class DiscoveryNode:
                         "timestamp": payload.get('timestamp', time.time()),
                         "type": "in"
                     })
+                    
+                # Déclencheur IA automatique (Sprint 4.2)
+                if getattr(self, "ai_enabled", False) and getattr(self, "ai_key", None):
+                    if "@archipel-ai" in msg.lower() or msg.lower().startswith("/ask"):
+                        print(f"[*] [AI] Requête détectée de {sender_id[:8]}...")
+                        threading.Thread(target=self._process_ai_request, args=(peer_id, msg), daemon=True).start()
+
 
             elif msg_type == TYPE_MANIFEST:
                 self._handle_manifest(peer_id, payload)
@@ -503,6 +510,51 @@ class DiscoveryNode:
             })
             
         self._send_secure_v1(target_pid, TYPE_CHAT_MSG, payload)
+        
+        # Auto-déclencheur pour nous-mêmes (si on tape @archipel-ai)
+        if getattr(self, "ai_enabled", False) and getattr(self, "ai_key", None):
+            if "@archipel-ai" in text.lower() or text.lower().startswith("/ask"):
+                print(f"[*] [AI] Traitement de notre propre requête...")
+                threading.Thread(target=self._process_ai_request, args=(target_pid, text), daemon=True).start()
+
+    def _process_ai_request(self, peer_id, query):
+        """Traite une question envoyée à l'IA en local et diffuse la réponse au pair."""
+        try:
+            from ai.gemini_service import GeminiService
+            gemini = GeminiService(api_key=self.ai_key, enabled=True)
+            
+            with self.history_lock:
+                history = self.message_history.get(peer_id, [])[-10:]
+                
+            # Extraire les fichiers RAG (accès direct au storage local)
+            files_context = {}
+            local_files = self.storage_mgr.get_available_files()
+            for fid, info in local_files.items():
+                if info.get("local_path") and os.path.exists(info["local_path"]):
+                    try:
+                        # Limite à 50KB par fichier pour le contexte prompt
+                        with open(info["local_path"], 'r', encoding='utf-8', errors='ignore') as f:
+                            content = f.read(50_000)
+                            if content.strip():
+                                files_context[info["manifest"]["filename"]] = content
+                    except:
+                        pass
+            
+            # Formater la requête pour Gemini (retirer le trigger si besoin)
+            clean_query = query.replace("@archipel-ai", "").replace("/ask", "").strip()
+            if not clean_query: clean_query = "Que puis-je faire pour toi ?"
+            
+            result = gemini.query(history, clean_query, files_context)
+            
+            if "text" in result:
+                response_text = f"🤖 [Archipel-AI] : {result['text']}"
+                # Envoyer la réponse au pair
+                self.send_chat_message(peer_id, response_text)
+                print(f"[+] [AI] Réponse envoyée à {peer_id[:8]}")
+            else:
+                print(f"[-] [AI] Erreur: {result.get('error', 'Inconnue')}")
+        except Exception as e:
+            print(f"[-] [AI] Erreur fatale processing : {e}")
 
     def _handle_manifest(self, peer_id, manifest):
         """Reçoit un manifest d'un pair."""
