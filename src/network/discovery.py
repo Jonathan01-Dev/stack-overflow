@@ -201,7 +201,6 @@ class DiscoveryNode:
         try:
             # 1. HELLO (e_A_pub)
             e_priv, e_pub = generate_ephemeral_keypair()
-            e_pub_bytes = e_pub.public_bytes(nacl.encoding.RawEncoder.encoding, nacl.encoding.RawEncoder.encoding) # Wait, X25519 use different encoding
             from cryptography.hazmat.primitives import serialization
             e_pub_bytes = e_pub.public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
             
