@@ -200,6 +200,9 @@ class DiscoveryNode:
                     print(f"[+] Tunnel E2EE établi avec {peer_id[:8]} (X25519 + AES-GCM)")
                     self._send_secure_tlv(peer_id, TYPE_PEER_LIST, self._build_peer_list_payload())
                     
+                    # Sync : Envoyer nos manifests locaux au nouveau pair
+                    self._sync_manifests_with_peer(peer_id)
+                    
                     # Listener dédié
                     threading.Thread(target=self._handle_client, args=(s, peer_id), daemon=True).start()
                 else:
@@ -314,6 +317,9 @@ class DiscoveryNode:
                     self.active_sessions[peer_id] = session
                     self.active_connections[peer_id] = conn
                 print(f"[+] Tunnel E2EE établi avec {peer_id[:8]} (X25519 + AES-GCM)")
+                
+                # Sync : Envoyer nos manifests locaux au nouveau pair
+                self._sync_manifests_with_peer(peer_id)
             else:
                 with self.connections_lock:
                     session = self.active_sessions.get(peer_id)
@@ -534,6 +540,9 @@ class DiscoveryNode:
             return
         
         self.storage_mgr.register_file(manifest, local_path=filepath)
+        # Ajouter à nos propres manifests connus pour pouvoir faire /download localement si on veut
+        self.network_manifests[manifest['file_id']] = manifest
+        
         print(f"[+] Fichier prêt pour le partage : {manifest['filename']} (ID: {manifest['file_id'][:16]})")
         
         # Broadcaster le manifest à tous les pairs connectés
@@ -544,6 +553,19 @@ class DiscoveryNode:
             self._send_secure_tlv(tid, TYPE_MANIFEST, manifest)
         
         print(f"[*] Manifest broadcasté à {len(targets)} pairs.")
+
+    def _sync_manifests_with_peer(self, peer_id):
+        """Envoie tous les manifests locaux à un pair spécifique (lors de la connexion)."""
+        index = self.storage_mgr._load_index()
+        local_files = index.get("files", {})
+        
+        if not local_files: return
+        
+        print(f"[*] Synchronisation de {len(local_files)} manifests avec {peer_id[:8]}...")
+        for file_id, info in local_files.items():
+            manifest = info.get("manifest")
+            if manifest:
+                self._send_secure_tlv(peer_id, TYPE_MANIFEST, manifest)
 
     def keep_alive_connections(self):
         """Envoie un PING toutes les 15s sur chaque connexion active"""
